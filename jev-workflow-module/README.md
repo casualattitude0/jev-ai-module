@@ -7,7 +7,63 @@
 這個模組只做決策，不執行任何工作流。怎麼叫起一個 skill／agent／tool 只有宿主
 知道，硬塞進這裡只會讓兩邊都難改。
 
-Stdlib only，零依賴。
+純 stdlib，零依賴。
+
+## 用法
+
+```bash
+cp .env.example .env          # repo 根目錄那一份，填入 JEV_API_KEY
+cd jev-workflow-module
+python3 -m jev_workflow "角色的待機動作還沒做完"
+```
+
+```
+route:      audit (1) -> asset-audit-anim (0.97)
+workflow:   Audit animation needs  (asset-audit-anim)
+command:    /asset-audit-anim
+stage:      audit
+entry:      skill (unimplemented)
+dir:        .../jev_workflow/workflows/asset-audit-anim
+inputs:     game design spec, the model checklist, the project tree
+next:       /anim-generate
+confidence: 0.97
+note:       nothing is implemented behind /asset-audit-anim yet; write system_prompt.md in the directory above
+```
+
+```bash
+python3 -m jev_workflow --list              # 依階段列出全部
+python3 -m jev_workflow --list --stage audit
+python3 -m jev_workflow --show coding-game  # 單一工作流的接口
+python3 -m jev_workflow --two-step "..."    # 或 --one-shot
+```
+
+當成函式庫，主程式拿 `interface` 去執行：
+
+```python
+from jev_workflow import select_workflow
+
+route = select_workflow("粒子特效要做一輪",
+                        context={"asset-audit-vfx": "missing"})
+
+iface = route.interface
+iface["command"]                      # '/vfx-generate'
+iface["entry"]["system_prompt_path"]  # 絕對路徑，宿主自己讀
+iface["inputs"]                       # 這個工作流需要什麼
+iface["next_steps"]                   # ['apply-assets'] —— 做完可以接誰
+iface["implemented"]                  # False -> 還沒有東西可跑
+route.blocked_by                      # ['asset-audit-vfx'] —— 你說還沒做的前置
+```
+
+收窄選項：
+
+```python
+select_workflow(req, stage="generate")              # 只在某個階段裡選
+select_workflow(req, allow=["playtest", "/qa-test"])
+select_workflow(req, stakes="high")                 # 選錯的代價
+select_workflow(req, two_step=True)                 # 強制先選階段
+```
+
+收窄到剩一個選項會直接拒絕（並告訴你該直接呼叫哪個指令），而不是假裝做了決策。
 
 ## 產線：33 個工作流，10 個階段
 
@@ -49,77 +105,6 @@ prompt、skill、tool，全部住在自己那一格路徑裡，互不干擾。
 它們，`implemented: false` 會一路顯示到 CLI 和回傳值上——沒做的事是**看得見**
 的缺口，不是沉默的失敗。
 
-## 用法
-
-```bash
-cp .env.example .env          # repo 根目錄那一份,填入 JEV_API_KEY
-cd jev-workflow-module
-python3 -m jev_workflow "角色的待機動作還沒做完"
-```
-
-`JEV_API_KEY` / `JEV_BASE_URL` 是所有模組共用的;若只要讓這個模組走別的
-endpoint 或別的金鑰,在根目錄的 `.env` 用 `WORKFLOW_API_KEY`、
-`WORKFLOW_BASE_URL`,有前綴的優先。
-
-決策可以走兩個 backend:`native`(Jev API,預設)或 `openrouter`
-(OpenRouter 上的 `~typesafe/jev-latest`,需要 `OPENROUTER_API_KEY`)。
-常設的選擇寫在專案根目錄的 `jev.json`(`modules.jev_workflow.backend`),
-臨時要換再用 `JEV_BACKEND`(全部)或 `WORKFLOW_BACKEND`(只有這個模組)覆蓋。
-這個模組只問通用的 `{state, questions}` 決策,兩個 backend 都直接支援,
-中間不做任何轉換。
-
-```bash
-JEV_BACKEND=openrouter python3 -m jev_workflow "角色的待機動作還沒做完"
-```
-
-```
-route:      audit (1) -> asset-audit-anim (0.97)
-workflow:   Audit animation needs  (asset-audit-anim)
-command:    /asset-audit-anim
-stage:      audit
-entry:      skill (unimplemented)
-dir:        .../jev_workflow/workflows/asset-audit-anim
-inputs:     game design spec, the model checklist, the project tree
-next:       /anim-generate
-confidence: 0.97
-note:       nothing is implemented behind /asset-audit-anim yet; write system_prompt.md in the directory above
-```
-
-當成函式庫，主程式拿 `interface` 去執行：
-
-```python
-from jev_workflow import select_workflow
-
-route = select_workflow("粒子特效要做一輪",
-                        context={"asset-audit-vfx": "missing"})
-
-iface = route.interface
-iface["command"]                      # '/vfx-generate'
-iface["entry"]["system_prompt_path"]  # 絕對路徑，宿主自己讀
-iface["inputs"]                       # 這個工作流需要什麼
-iface["next_steps"]                   # ['apply-assets'] — 做完可以接誰
-iface["implemented"]                  # False -> 還沒有東西可跑
-route.blocked_by                      # ['asset-audit-vfx'] — 你說還沒做的前置
-```
-
-收窄選項：
-
-```python
-select_workflow(req, stage="generate")              # 只在某個階段裡選
-select_workflow(req, allow=["playtest", "/qa-test"])
-select_workflow(req, stakes="high")                 # 選錯的代價
-select_workflow(req, two_step=True)                 # 強制先選階段
-```
-
-收窄到剩一個選項會直接拒絕（並告訴你該直接呼叫哪個指令），而不是假裝做了決策。
-
-```bash
-python3 -m jev_workflow --list              # 依階段列出全部
-python3 -m jev_workflow --list --stage audit
-python3 -m jev_workflow --show coding-game  # 單一工作流的接口
-python3 -m jev_workflow --two-step "..."    # 或 --one-shot
-```
-
 ## 兩段式路由
 
 目錄長大之後，「一次把 33 個近鄰分清楚」本身就是個難題，而且 Jev 的 body
@@ -148,7 +133,7 @@ python3 -m jev_workflow --two-step "..."    # 或 --one-shot
 | `when_to_use` / `avoid_when` | 跟隔壁工作流的邊界 |
 | `inputs` / `outputs` | 宿主要準備什麼、會拿到什麼 |
 | `depends_on` | 誰的產出是它的輸入（不可以指向更後面的階段） |
-| `entry` | `kind`、`ref`、`system_prompt`、`tools` — 宿主執行時要的東西 |
+| `entry` | `kind`、`ref`、`system_prompt`、`tools` —— 宿主執行時要的東西 |
 
 `description` 寫不好，路由就不會準。載入時會驗證：id 與資料夾不符、command
 與 id 不符、未知階段、指向不存在或更後面的 `depends_on`、壞掉的 JSON，全部
@@ -195,6 +180,30 @@ select_workflow(req, context={"define-art": "missing"}).blocked_by
 **如果專案是 2D**：刪掉 `model-generate`、`anim-generate`、`asset-audit-model`、
 `asset-audit-anim` 四個資料夾即可，測試會繼續是綠的（資產矩陣的對稱性檢查看的
 是 audit 與 generate 有沒有配對，不是有幾種資產）。
+
+## 設定
+
+跟另外兩個模組同一套 resolver：`WORKFLOW_<名稱>` 贏過 `JEV_<名稱>`，贏過
+`jev.json` 的 `modules.jev_workflow`，贏過它的頂層，贏過內建預設。
+
+| 設定 | 共用名 | 模組專屬名 | `jev.json` |
+|---|---|---|---|
+| 決策走哪條路 | `JEV_BACKEND` | `WORKFLOW_BACKEND` | `backend` |
+| 工作流目錄 | `JEV_MODULES` | `WORKFLOW_MODULES` | `modules` |
+| Jev endpoint | `JEV_BASE_URL` | `WORKFLOW_BASE_URL` | `base_url` |
+| 金鑰 | `JEV_API_KEY` | `WORKFLOW_API_KEY` | 拒絕（只能放 `.env`） |
+
+決策可以走兩個 backend：`native`（Jev API，預設）或 `openrouter`（OpenRouter 上的
+`~typesafe/jev-latest`，需要 `OPENROUTER_API_KEY`）。常設的選擇寫在專案根目錄的
+`jev.json`（`modules.jev_workflow.backend`），臨時要換再用環境變數覆蓋：
+
+```bash
+JEV_BACKEND=openrouter python3 -m jev_workflow "角色的待機動作還沒做完"      # 所有模組
+WORKFLOW_BACKEND=openrouter python3 -m jev_workflow "..."                 # 只有這個
+```
+
+這個模組只問通用的 `{state, questions}` 決策，兩個 backend 都直接支援，
+中間不做任何轉換。
 
 ## 驗證
 

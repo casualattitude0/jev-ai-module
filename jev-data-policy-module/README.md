@@ -1,39 +1,21 @@
 # jev-data-policy-module
 
-Judges one thing: how sensitive is this content — does it carry personal data
-or secrets? It answers with a class, and stops there.
+判斷一段內容的敏感度：裡面有沒有可識別到個人的資料、有沒有憑證。判斷交給
+[Jev decision API](https://www.jevai.org/docs)，回傳的是一個**等級**，到此為止。
 
-Stdlib only. No dependencies.
+這個模組不認識任何收件對象。裡面沒有廠商、沒有模型、沒有目標、沒有白名單，
+也沒有核准清單。「`confidential` 能不能送去某一處」是你的合約與風險的決定，
+該住在那些東西旁邊，而不是住在讀文字的這顆裡面。那個切分就是這個模組的全部
+重點：一件事——看內容，說出等級。之後發生什麼是呼叫端的事。
 
-## What it does not do
+純 stdlib，零依賴。
 
-It does not know who may receive anything. There are no vendors, no models, no
-targets, no allow-lists and no approval register in here. Deciding that
-`confidential` may go to one place and not another is a decision about your
-agreements and your risk, and it belongs where those live — not inside the
-thing that reads the text.
-
-That separation is the whole point of the module. One job: look at content,
-name its class. What happens next is the caller's.
-
-## Use
-
-```python
-from jev_data_policy import classify
-
-c = classify("user wang.mei@example.com, phone 0912-345-678")
-c.data_class            # 'confidential'
-c.confidence            # 0.98
-c.probabilities         # {'confidential': 0.98, 'internal': 0.02, ...}
-c.at_least("internal")  # True
-```
-
-From the shell:
+## 用法
 
 ```bash
 python3 -m jev_data_policy "客戶 A123456789 的帳單地址是..."
 python3 -m jev_data_policy --json "..."
-python3 -m jev_data_policy --classes        # the ladder; makes no network call
+python3 -m jev_data_policy --classes        # 看梯子，不打網路
 cat suspect.log | python3 -m jev_data_policy
 ```
 
@@ -45,86 +27,86 @@ confidence: 1.00
             confidential=1.00  internal=0.00  public=0.00  regulated=0.00
 ```
 
-## The ladder
+當成函式庫：
 
-Four classes, ordered least to most sensitive. Each is defined by what the
-content **contains**, never by who may see it:
+```python
+from jev_data_policy import classify
 
-| class | what is in it |
+c = classify("user wang.mei@example.com, phone 0912-345-678")
+c.data_class            # 'confidential'
+c.confidence            # 0.98
+c.probabilities         # {'confidential': 0.98, 'internal': 0.02, ...}
+c.at_least("internal")  # True
+```
+
+## 敏感度的梯子
+
+四個等級，由低到高。每一級的定義都是內容裡**有什麼**，不是誰能看：
+
+| 等級 | 裡面有什麼 |
 |---|---|
-| `public` | nothing identifying anyone, nothing that grants access |
-| `internal` | no personal data, no credentials, but not for outsiders |
-| `confidential` | identifies a specific person, or grants access to a system |
-| `regulated` | personal data a statute protects, or a credential that moves money or reaches production |
+| `public` | 不能識別到任何人，也不能拿來取得存取權 |
+| `internal` | 沒有個資、沒有憑證，但不對外 |
+| `confidential` | 能指認到特定的人，或能取得某個系統的存取權 |
+| `regulated` | 受法規保護的個資，或能動錢、能進 production 的憑證 |
 
-They live in [`classes.json`](jev_data_policy/classes.json), and each
-description is handed to Jev verbatim as that class's criteria — **editing a
-description is editing the decision**. Point `JEV_DATA_POLICY` (or
-`DATA_POLICY_DATA_POLICY`) at another file to use a different ladder. A test
-asserts no description ever starts talking about approvals, vendors or
-recipients; that is how this module stays one job wide.
+梯子住在 [`classes.json`](jev_data_policy/classes.json)，每一段描述會原封不動
+交給 Jev 當成那一級的判準——**改描述就是改決策**。把 `JEV_DATA_POLICY`
+（或 `DATA_POLICY_DATA_POLICY`）指到別的檔案就換一把梯子。有測試守著沒有任何
+一段描述開始談核准、廠商或收件對象；這個模組是靠它維持只有一件事寬。
 
-## Being probabilistic, it fails closed upwards
+## 是機率，所以只往上、不往下
 
-The judgement is Jev's: one typed `choice` decision, returning a class and its
-probabilities. Jev returns typed decisions, not prose, so there is no honest
-way to make it enumerate *which* span of text gave the answer away. A class is
-what it can say, so a class is what this returns.
+判斷是 Jev 的：一題型別化的 `choice` 決策，回傳一個等級與它的機率分布。
+Jev 回型別化的決策、不回自由文字，所以沒有誠實的方式讓它列出**是哪一段**
+文字洩漏的。能給的是等級，所以給的就是等級。
 
-A probability is the wrong shape for "is there personal data in here", so an
-unsure answer is never rounded down:
+「這裡面有沒有個資」用機率回答是錯的形狀，所以不確定時絕不往下取整：
 
 ```python
 c = classify(text, min_confidence=0.9)
 c.data_class       # 'confidential'
-c.escalated_from   # 'public' — what Jev actually said, kept on the record
+c.escalated_from   # 'public' —— Jev 原本說的，留在紀錄裡
 ```
 
-Below `min_confidence`, the answer is raised to the most sensitive class still
-carrying probability, and what Jev said is preserved rather than overwritten.
-Escalation only ever raises. The default is `0.0`: Jev, reported verbatim.
+低於 `min_confidence` 時，答案會被抬到仍帶有機率的最高一級，而 Jev 原本說的
+會被保留而不是覆蓋掉。升級永遠只往上。預設是 `0.0`：原樣回報 Jev 說的。
 
-Everything else fails the same direction. An outage raises instead of
-answering `public`. A class outside the ladder is refused rather than passed
-on. Content over 16 KiB is refused rather than trimmed, because classifying
-the first half of something is how a regulated payload comes back clean.
+其他失敗也都往同一個方向倒。服務掛掉是往上抬，不是回 `public`。梯子以外的
+等級是拒絕，不是照傳。超過 16 KiB 的內容是拒絕，不是截斷——只分類前半段，
+正是一份 regulated 的內容乾乾淨淨回來的方式。
 
-## Classifying content discloses it
+## 要分類就會揭露
 
-This module sends the text to Jev. That is the honest cost of asking, and it
-cannot be designed away: if the content itself must not leave the machine,
-pass a description of it rather than the thing.
+這個模組會把那段文字送給 Jev。那是問問題的代價，設計不掉：如果內容本身不能
+離開這台機器，傳一段描述而不是原文。
 
 ```python
-classify("a support ticket containing a customer's ID number and address")
+classify("一張客訴單，裡面有客戶的身分證字號和地址")
 ```
 
-The OpenRouter key is checked against the model slug before every call, so it
-reaches a Jev decisions model and nothing else — pointing it at
-`openai/*` or `anthropic/*` is refused.
+每次呼叫前都會拿 OpenRouter 金鑰對 model slug 做檢查，所以它只到得了 Jev 的
+決策模型，別的地方去不了——指向 `openai/*` 或 `anthropic/*` 會被拒絕。
 
-## Configuration
+## 設定
 
-Same resolver as the other modules: `DATA_POLICY_<NAME>` beats `JEV_<NAME>`
-beats `jev.json`'s `modules.jev_data_policy` beats its top level beats the
-built-in default.
+跟另外兩個模組同一套 resolver：`DATA_POLICY_<名稱>` 贏過 `JEV_<名稱>`，
+贏過 `jev.json` 的 `modules.jev_data_policy`，贏過它的頂層，贏過內建預設。
 
-| setting | shared | scoped | `jev.json` |
+| 設定 | 共用名 | 模組專屬名 | `jev.json` |
 |---|---|---|---|
-| which backend answers | `JEV_BACKEND` | `DATA_POLICY_BACKEND` | `backend` |
-| the class ladder | `JEV_DATA_POLICY` | `DATA_POLICY_DATA_POLICY` | `data_policy` |
+| 決策走哪條路 | `JEV_BACKEND` | `DATA_POLICY_BACKEND` | `backend` |
+| 敏感度等級表 | `JEV_DATA_POLICY` | `DATA_POLICY_DATA_POLICY` | `data_policy` |
 | Jev endpoint | `JEV_BASE_URL` | `DATA_POLICY_BASE_URL` | `base_url` |
 
-Keys only ever come from `.env`; a key written into `jev.json` is refused,
-because that file is checked in.
+金鑰只能從 `.env` 來；寫進 `jev.json` 會被拒絕，因為那個檔案會進版控。
 
-## Verify
+## 驗證
 
 ```bash
-python3 -m jev_data_policy.verify          # 32 offline checks
-python3 -m jev_data_policy.verify --live   # + 6 real classifications
+python3 -m jev_data_policy.verify          # 32 個離線檢查
+python3 -m jev_data_policy.verify --live   # 再加 6 筆真實分類
 ```
 
-The offline layer stubs the transport and makes no network call, so it is
-green or the module is broken. What both layers actually produce is in
-[result.md](result.md).
+離線那層把 transport 上了 stub、不打網路，所以它不是綠的就是模組壞了。
+兩層實際產出什麼，寫在 [result.md](result.md)。
