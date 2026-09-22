@@ -1,70 +1,75 @@
 #!/usr/bin/env python3
-"""Inspect the data policy.
+"""Classify how sensitive a piece of content is.
 
-    python3 -m jev_data_policy                        show the policy
-    python3 -m jev_data_policy --class internal       who is cleared for a class
-    python3 -m jev_data_policy --check jevai.org internal
+    python3 -m jev_data_policy "客戶 A123456789 的帳單地址是..."
+    python3 -m jev_data_policy --min-confidence 0.7 "..."
+    python3 -m jev_data_policy --json "..."
+    python3 -m jev_data_policy --classes            # the ladder, no network call
+    cat suspect.log | python3 -m jev_data_policy
+
+Reads JEV_API_KEY (native) or OPENROUTER_API_KEY (openrouter) from .env.
 """
 import argparse
+import json
 import sys
 
-from .policy import (PolicyError, approved_targets, assert_service,
-                     assert_target, load, policy_path, rank)
+from .classify import PolicyError, classes_path, classify, load
+from .client import JevError, setting_source
+
+
+def print_classes():
+    spec = load()
+    path, source = classes_path()
+    print(f"classes: {path}\n         (from {source})\n")
+    for i, c in enumerate(spec["classes"]):
+        print(f"  {i}  {c['id']}")
+        print(f"     {c['description']}\n")
+    return 0
 
 
 def main():
     p = argparse.ArgumentParser(add_help=True)
-    p.add_argument("--class", dest="data_class", help="show clearance for a class")
-    p.add_argument("--check", nargs=2, metavar=("ID", "CLASS"),
-                   help="check one target or service against a class")
-    p.add_argument("--redacted", action="store_true",
-                   help="with --check, assert the text has been redacted")
+    p.add_argument("content", nargs="*",
+                   help="the content to classify (or pipe on stdin)")
+    p.add_argument("--min-confidence", type=float, default=0.0, metavar="P",
+                   help="below this, raise the answer to the most sensitive "
+                        "class still in play")
+    p.add_argument("--context", action="append", metavar="KEY=VALUE",
+                   help="anything else Jev should weigh; repeatable")
+    p.add_argument("--backend", choices=["native", "openrouter"],
+                   help="override the backend for this run")
+    p.add_argument("--json", action="store_true", help="machine-readable output")
+    p.add_argument("--classes", action="store_true",
+                   help="show the class ladder and exit; makes no network call")
     args = p.parse_args()
 
     try:
-        pol = load()
-    except PolicyError as e:
+        if args.classes:
+            return print_classes()
+
+        content = " ".join(args.content) if args.content else sys.stdin.read()
+        context = dict(kv.split("=", 1) for kv in args.context) if args.context else None
+        result = classify(content, context=context, backend=args.backend,
+                          min_confidence=args.min_confidence)
+    except (PolicyError, JevError) as e:
         print(f"FAIL: {e}", file=sys.stderr)
         return 1
 
-    if args.check:
-        entry_id, cls = args.check
-        is_service = any(s["id"] == entry_id for s in pol.get("services") or [])
-        try:
-            if is_service:
-                assert_service(entry_id, cls, redacted=args.redacted, pol=pol)
-            else:
-                assert_target(entry_id, cls, pol=pol)
-        except PolicyError as e:
-            print(f"DENY  {e}")
-            return 1
-        print(f"ALLOW {entry_id} may handle {cls}")
+    if args.json:
+        print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))
         return 0
 
-    if args.data_class:
-        try:
-            ok = approved_targets(args.data_class, pol)
-        except PolicyError as e:
-            print(f"FAIL: {e}", file=sys.stderr)
-            return 1
-        print(f"targets cleared for {args.data_class!r}: {', '.join(ok) or 'none'}")
-        return 0
-
-    path, source = policy_path()
-    floor = pol.get("external_class_floor")
-    print(f"policy: {path}\n        (from {source})\n")
-    print(f"classes: {' < '.join(pol['classes'])}")
-    print(f"external floor: {floor}  "
-          f"(at or above this, outbound text must be redacted)\n")
-    for kind in ("targets", "services"):
-        print(f"{kind}:")
-        for e in pol.get(kind) or []:
-            approved = e.get("approved_classes") or ["public"]
-            top = max(approved, key=lambda c: rank(c, pol))
-            by = e.get("approved_by") or "-"
-            flag = "" if rank(top, pol) == 0 else f"  approved_by={by}"
-            print(f"  {e['id']:<28} up to {top}{flag}")
-        print()
+    backend, source = setting_source("BACKEND", "native")
+    print(f"backend:    {backend}  (from {source})")
+    print(f"content:    {result.content_bytes} bytes")
+    print(f"class:      {result.data_class}")
+    print(f"confidence: {result.confidence:.2f}")
+    if result.escalated:
+        print(f"            escalated from {result.escalated_from!r}: below "
+              f"--min-confidence {args.min_confidence}")
+    if result.probabilities:
+        ranked = sorted(result.probabilities.items(), key=lambda kv: -kv[1])
+        print("            " + "  ".join(f"{k}={v:.2f}" for k, v in ranked))
     return 0
 
 

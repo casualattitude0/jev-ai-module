@@ -1,8 +1,7 @@
-"""Data classification for outbound data. Stdlib only."""
-from .policy import (ExternalLeakError, NotApprovedError, PolicyError,
-                     approved_targets, assert_service, assert_target,
-                     guarded_call, load, rank, require_targets)
+"""Content sensitivity classification. Does this contain personal data or secrets?"""
+from .classify import (MAX_CONTENT_BYTES, Classification, PolicyError,
+                       class_ids, classes_path, classify, load, rank)
+from .client import JevError
 
-__all__ = ["PolicyError", "NotApprovedError", "ExternalLeakError", "load",
-           "rank", "approved_targets", "assert_target", "require_targets",
-           "assert_service", "guarded_call"]
+__all__ = ["PolicyError", "JevError", "Classification", "classify", "load",
+           "class_ids", "classes_path", "rank", "MAX_CONTENT_BYTES"]

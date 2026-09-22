@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "_note": "The sensitivity ladder, ordered least to most sensitive. Each description is handed to Jev verbatim as the criteria for that class, so editing a description IS editing the decision. Keep them about what the content contains -- personal data, credentials -- and never about who is allowed to receive it: this module does not know about vendors, models or approvals.",
+  "instructions": "Classify the sensitivity of this content by what it actually contains. Judge the content itself, not the topic it discusses: text that merely mentions passwords is not a credential, and a sentence about a patient is not a medical record. When content matches more than one class, choose the most sensitive one that genuinely applies.",
+  "classes": [
+    {
+      "id": "public",
+      "description": "Nothing that identifies a person and nothing that grants access. Published documentation, open-source code, marketing copy, generic questions. Releasing it costs nothing."
+    },
+    {
+      "id": "internal",
+      "description": "No personal data and no credentials, but not for outsiders: unreleased plans, internal process, private source code, architecture and infrastructure detail, pricing and commercial terms. A leak is a business loss, not a loss to any individual."
+    },
+    {
+      "id": "confidential",
+      "description": "Identifies a specific living person, or grants access to a system. Names with contact details, email addresses, phone numbers, home addresses, user accounts and IDs, IP addresses, employee or customer records. Also secrets: API keys, access tokens, passwords, private keys, connection strings, session cookies."
+    },
+    {
+      "id": "regulated",
+      "description": "Personal data a statute protects, or a credential that moves money or reaches production. National ID and passport numbers, bank and payment card numbers, health and medical records, biometrics, precise location history, data about children, and special-category data such as race, religion, politics, union membership, sexual orientation or criminal record. Also long-lived production credentials."
+    }
+  ]
+}
