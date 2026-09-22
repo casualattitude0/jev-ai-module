@@ -19,6 +19,7 @@ python3 -m jev_workflow "角色的待機動作還沒做完"
 
 ```
 route:      audit (1) -> asset-audit-anim (0.97)
+backend:    native  (from built-in default)
 workflow:   Audit animation needs  (asset-audit-anim)
 command:    /asset-audit-anim
 stage:      audit
@@ -112,10 +113,12 @@ prompt、skill、tool，全部住在自己那一格路徑裡，互不干擾。
 
 - **一段式**：一個 `choice` 問題涵蓋全部工作流。
 - **兩段式**：先問這是產線的哪個階段（10 選 1），再問那個階段裡的哪個工作流
-  （最多 7 選 1）。
+  （最多 7 選 1）。階段選項不只給階段名，還會列出裡面每個工作流的名字、指令與
+  第一句描述（6.7 KB）——只給標籤的話，第一題是在選名詞，不是在選工作的種類；
+  實測把階段命中率從 93% 拉到 97%，見 [result.md](result.md)。
 
 `two_step=None`（預設）會自己選：payload 超過 `MAX_PAYLOAD_BYTES`（20 KiB）
-就切成兩段。目前 33 個工作流是 17.5 KB，落在一段式。門檻是照著實測結果定的，
+就切成兩段。目前 33 個工作流是 17.1 KB，落在一段式。門檻是照著實測結果定的，
 不是猜的——見 [result.md](result.md)。
 
 兩段式選到只有一個工作流的階段（`discuss`／`architect`／`integrate`）時，
@@ -178,8 +181,9 @@ select_workflow(req, context={"define-art": "missing"}).blocked_by
   翻譯回填在實務上是同一條管線。
 
 **如果專案是 2D**：刪掉 `model-generate`、`anim-generate`、`asset-audit-model`、
-`asset-audit-anim` 四個資料夾即可，測試會繼續是綠的（資產矩陣的對稱性檢查看的
-是 audit 與 generate 有沒有配對，不是有幾種資產）。
+`asset-audit-anim` 四個資料夾，再把前兩個從 `/apply-assets` 的 `depends_on` 裡
+拿掉（指向不存在的工作流會被拒絕載入），測試就會繼續是綠的（資產矩陣的對稱性
+檢查看的是 audit 與 generate 有沒有配對，不是有幾種資產）。
 
 ## 設定
 
@@ -208,7 +212,7 @@ WORKFLOW_BACKEND=openrouter python3 -m jev_workflow "..."                 # 只�
 ## 驗證
 
 ```bash
-python3 -m jev_workflow.verify          # 35 個離線檢查，不打網路
+python3 -m jev_workflow.verify          # 49 個離線檢查，不打網路
 python3 -m jev_workflow.verify --live   # 再加 21 條真實路由
 ```
 

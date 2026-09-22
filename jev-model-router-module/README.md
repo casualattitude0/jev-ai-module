@@ -71,7 +71,14 @@ print(serve(sel, "把 parser 改成 async，檔案在這：..."))
 第一段問 Jev 這個任務有多難（0-3）、是哪一類的工作。那個答案定出一道**能力
 門檻**，在 `registry.qualified()` 本地套用。只有過得了門檻的模型才進得了第二段，
 所以成本永遠不可能跟難度交換——它是已經做得來這件事的候選之間的平手決勝點，
-不是一個互相競爭的目標。`default_priorities` 把 `cost` 排在最後，也是同一個理由。
+不是一個互相競爭的目標。
+
+**平手怎麼判，由門檻自己的判決決定。** 難度 2-3 時門檻切掉了一批模型，剩下的
+候選之間 `quality` 排第一、`cost` 排最後（就是 `default_priorities`）。難度 0-1
+時門檻放行整個登錄檔——那正是門檻在說「這件事誰來做都行」，此時再把 quality 排
+第一就沒有東西好權衡，只會預設買下最貴的那個，所以這一段改由 `cost` 領頭。這張
+對照表是 `models.json` 的 `priorities_by_level`；呼叫端自己傳 `priorities` 永遠
+優先，而 `assess_first=False` 沒有難度可循，走的還是 `default_priorities`。
 
 ```
 $ python3 -m jev_model_router "refactor authentication across 40 files; requirements are ambiguous"
@@ -172,9 +179,12 @@ result = call("select_model", {"task": "...", "stakes": "high"})
 `require`、`require_published`）。難度四捨五入到最近的級距，所以 2.49 還留在
 第 2 級，要 2.5 才進得了第 3 級。
 
-一個 variant 的成本與延遲，是 base 值被那個 effort 的 `step`（來自 `efforts` 表）
-位移後、再夾回 low/medium/high。路由至少需要兩個 variant，不夠時
-`registry.load()` 會拋錯。
+一個 variant 的延遲，是 base 值被那個 effort 的 `step`（來自 `efforts` 表）位移
+後、再夾回 low/medium/high。成本用同一個 step，但**只升不降**：想得少確實花得少，
+卻不會讓那個模型換到比較便宜的計價表。允許往下位移會把所有低 effort 的 variant
+壓進同一格——Sonnet 的 $2/$10 讀起來會跟 Luna 的 $0.20/$1.20 一樣便宜——而那一格
+正是上面那段拿來打平手的軸，壓平了就等於沒有東西可以比。路由至少需要兩個
+variant，不夠時 `registry.load()` 會拋錯。
 
 指到別的登錄檔：`JEV_MODELS=/path/to/models.json`。
 
@@ -229,7 +239,10 @@ backend:    openrouter  (from jev.json modules.jev_model_router.backend)
 ```
 
 金鑰寫進 `jev.json` 會被拒絕——那個檔案會進版控，金鑰留在 `.env`。要釘 Jev 的
-版本，用 `JEV_OPENROUTER_MODEL`，不要用 `-latest`。
+版本，用 `JEV_OPENROUTER_MODEL`，不要用 `-latest`。OpenRouter 用開頭的 `~` 標示
+浮動別名，釘死的版本沒有那個符號：`~typesafe/jev-latest` 與
+`typesafe/jev-1.13-20260917` 都是合法的 Jev slug，兩種拼法都收；不是 Jev 的一律
+拒絕。
 
 OpenRouter 只提供通用的 `{state, questions}` 決策端點，沒有 Jev 的具名 preset，
 所以這個模組用到的那一個 preset（`model-route`）在這裡被寫成它本來的那組問題，
