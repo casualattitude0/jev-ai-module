@@ -8,6 +8,33 @@
     "latency",
     "cost"
   ],
+  "_priorities_note": "Which priorities Jev is given, by difficulty level. Cost is still never traded against difficulty: the capability floor has already run, so everything Jev sees can do the work. At level 0-1 the floor admits the whole registry, which is the floor saying the task is routine -- with nothing left to separate the candidates, a quality-first ordering just buys the dearest model by default. Level 2-3 keeps default_priorities. default_priorities itself is used when no difficulty is known, as with assess_first=False.",
+  "priorities_by_level": {
+    "0": [
+      "cost",
+      "latency",
+      "quality"
+    ],
+    "1": [
+      "cost",
+      "quality",
+      "latency"
+    ],
+    "2": [
+      "quality",
+      "context",
+      "tool_use",
+      "latency",
+      "cost"
+    ],
+    "3": [
+      "quality",
+      "context",
+      "tool_use",
+      "latency",
+      "cost"
+    ]
+  },
   "_note": "A routing option is one (model, effort) pair. Variant id is '<model id>@<effort>'. Prices are USD per 1M tokens.",
   "efforts": {
     "none": {

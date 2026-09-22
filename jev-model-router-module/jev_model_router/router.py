@@ -22,10 +22,21 @@ ASSESS_QUESTIONS = {
         "type": "choice",
         "instructions": "What kind of work is this?",
         "criteria": {
-            "code": "Reading or writing code in a repository",
+            # "code" has to name design and debugging explicitly. Asked only
+            # about reading and writing code, Jev files "design an algorithm
+            # and justify the trade-offs" under writing, because the
+            # deliverable is prose -- and the writing floor is deliberately
+            # lower, so a frontier engineering problem would land under a
+            # floor meant for an essay.
+            "code": "Reading, writing, designing or debugging software, "
+                    "including algorithm and architecture decisions, even "
+                    "when what gets handed back is an explanation rather "
+                    "than a diff",
             "browser": "Driving a browser or a computer UI",
-            "research": "Gathering and judging evidence",
-            "writing": "Producing prose",
+            "research": "Gathering and judging evidence from sources",
+            "writing": "Producing prose that is judged as writing -- style, "
+                       "clarity, argument -- rather than on technical "
+                       "correctness",
             "general": "None of the above",
         },
     },
@@ -180,10 +191,20 @@ def select_model(task, *, stakes="medium", priorities=None, constraints=None,
         reg, allow=allow, min_context_tokens=min_context_tokens, efforts=efforts
     )
 
+    # An explicit list always wins. Otherwise the floor's own verdict on the
+    # task decides the tie-break: see registry.priorities_for. With no
+    # assessment there is no verdict, so the static default applies.
+    if priorities:
+        ranked = priorities
+    elif difficulty is not None:
+        ranked = registry.priorities_for(reg, difficulty)
+    else:
+        ranked = reg.get("default_priorities")
+
     payload = {
         "task": task,
         "candidates": cands,
-        "priorities": priorities or reg.get("default_priorities") or ["quality"],
+        "priorities": ranked or ["quality"],
         "stakes": stakes,
     }
     limits = list(constraints or [])
