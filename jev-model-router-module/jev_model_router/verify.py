@@ -369,6 +369,52 @@ def offline_floor(reg):
         return f"cost ranks last: {pr}"
     check("cost ranks last among default priorities", priorities_order)
 
+    def priorities_follow_the_floor():
+        # The tie-break tracks what the floor already decided. Where the floor
+        # admits everything, it has called the task routine, and a
+        # quality-first ordering would just buy the dearest qualifying model.
+        from .registry import priorities_for
+        whole = len(variants(reg))
+        for difficulty in (0.0, 1.0):
+            keep, _, _ = qualified(reg, "general", difficulty)
+            expect(len(keep) == whole,
+                   f"difficulty {difficulty} no longer admits every variant")
+            pr = priorities_for(reg, difficulty)
+            expect(pr[0] == "cost",
+                   f"difficulty {difficulty} should lead on cost, got {pr}")
+        for difficulty in (2.0, 3.0):
+            pr = priorities_for(reg, difficulty)
+            expect(pr == reg["default_priorities"],
+                   f"difficulty {difficulty} should keep the default, got {pr}")
+            expect(pr[-1] == "cost", f"cost should rank last, got {pr}")
+        return "cost leads only where the floor admits everything"
+    check("the tie-break follows the floor's own verdict",
+          priorities_follow_the_floor)
+
+    def explicit_priorities_win():
+        # A caller who names an ordering must get it, whatever the difficulty.
+        sent = {}
+        import jev_model_router.router as _r
+        real = _r.post
+
+        def spy(path, payload, **kw):
+            sent.update(payload)
+            return {"decision": "claude-opus-5@high", "confidence": 1.0}
+        _r.post = spy
+        try:
+            _r.select_model("x", kind="code", difficulty=0.0,
+                            priorities=["quality", "cost"])
+            expect(sent["priorities"] == ["quality", "cost"],
+                   f"explicit priorities were overridden: {sent['priorities']}")
+            sent.clear()
+            _r.select_model("x", kind="code", difficulty=0.0)
+            expect(sent["priorities"][0] == "cost",
+                   f"derived priorities not applied: {sent['priorities']}")
+        finally:
+            _r.post = real
+        return "an explicit ordering is never second-guessed"
+    check("explicit priorities beat the derived ones", explicit_priorities_win)
+
     def input_tokens_implies_context():
         big = max(m["context_tokens"] for m in enabled(reg)) + 1
         try:
@@ -526,10 +572,22 @@ def offline_backends(reg):
                            f"{slug}: wrong error: {e}")
                     continue
                 raise AssertionError(f"{slug} should be refused")
-            os.environ["JEV_OPENROUTER_MODEL"] = "~typesafe/jev-1.13-20260917"
-            expect(resolve_jev_model() == "~typesafe/jev-1.13-20260917",
-                   "a pinned Jev version should be allowed")
-            return "Claude and GPT slugs refused; pinned Jev versions allowed"
+            # OpenRouter serves a pinned version without the "~", which marks
+            # a floating alias; refusing that spelling would refuse every pin.
+            for pin in ("typesafe/jev-1.13-20260917", "~typesafe/jev-latest"):
+                os.environ["JEV_OPENROUTER_MODEL"] = pin
+                expect(resolve_jev_model() == pin,
+                       f"a Jev slug should be allowed: {pin}")
+            # Still inside the Jev family only: another model from the same
+            # vendor is not a decisions model and must not have the key.
+            os.environ["JEV_OPENROUTER_MODEL"] = "typesafe/chat-9"
+            try:
+                resolve_jev_model()
+            except JevError:
+                pass
+            else:
+                raise AssertionError("typesafe/chat-9 should be refused")
+            return "Claude and GPT slugs refused; both Jev spellings allowed"
         finally:
             for k, v in saved.items():
                 os.environ.pop(k, None)
@@ -947,36 +1005,77 @@ def per_model(reg, smoke=True):
             check(f"{v['id']}: live CLI call succeeds", smoke_call)
 
 
-def per_model_routing(reg):
-    models = enabled(reg)
-    tiers = {m["id"]: m["tier"] for m in models}
-    tasks = {
+# A probe task per (kind, tier). The kind matters: the code floor gates on
+# SWE-bench Pro, so a model that leads on browser work and not on code is
+# unreachable for a hard *code* task by design, and probing it with one would
+# be testing the floor rather than the model's reachability.
+PROBE_TASKS = {
+    "code": {
         "fast": "change a log message string in one file",
         "balanced": "add pagination to an existing REST endpoint and its tests",
         "deep": "redesign the transaction ledger across the service with "
                 "ambiguous requirements and no downtime",
-    }
-    stakes = {"fast": "low", "balanced": "medium", "deep": "high"}
+    },
+    "browser": {
+        "fast": "open a page and read back its title",
+        "balanced": "drive a web checkout and verify the order total",
+        "deep": "navigate an unfamiliar admin console end to end and reconcile "
+                "every billing discrepancy it reports",
+    },
+}
+PROBE_DIFFICULTY = {"fast": 0.0, "balanced": 2.0, "deep": 3.0}
+PROBE_STAKES = {"fast": "low", "balanced": "medium", "deep": "high"}
+
+
+def _probe_kind(reg, model, difficulty):
+    """A kind whose floor this model clears, so the probe is a fair one."""
+    from .registry import qualified
+    for kind in PROBE_TASKS:
+        keep, _, _ = qualified(reg, kind, difficulty, allow=[model["id"]])
+        if keep:
+            return kind
+    return None
+
+
+def per_model_routing(reg):
+    from .registry import qualified
+    models = enabled(reg)
+    tiers = {m["id"]: m["tier"] for m in models}
 
     print(f"\nper-model routing reachability ({len(models)} models, {GAP}s apart)")
     for i, m in enumerate(models):
-        foil = next((x["id"] for x in models if x["tier"] != m["tier"]), None)
-        if foil is None:
-            continue
-        if i:
-            time.sleep(GAP)
+        difficulty = PROBE_DIFFICULTY[m["tier"]]
+        kind = _probe_kind(reg, m, difficulty)
 
-        def reach(m=m, foil=foil):
-            sel = select_model(tasks[m["tier"]], stakes=stakes[m["tier"]],
+        def reach(m=m, kind=kind, difficulty=difficulty):
+            if kind is None:
+                raise SkipCheck(
+                    f"no kind's floor at difficulty {difficulty} admits "
+                    f"{m['id']}; it is unreachable by design, not by accident")
+            # The foil has to clear the same floor, or it is excluded before
+            # Jev ever sees it and the sole survivor wins without choosing.
+            keep, _, _ = qualified(reg, kind, difficulty)
+            foil = next((v["model"]["id"] for v in keep
+                         if v["model"]["id"] != m["id"]
+                         and v["model"]["tier"] != m["tier"]), None)
+            if foil is None:
+                raise SkipCheck(
+                    f"no other-tier model clears the {kind} floor at "
+                    f"difficulty {difficulty}")
+            sel = select_model(PROBE_TASKS[kind][m["tier"]], kind=kind,
+                               difficulty=difficulty,
+                               stakes=PROBE_STAKES[m["tier"]],
                                allow=[m["id"], foil])
             base, _ = split_variant(sel.variant_id)
             expect(base in (m["id"], foil), f"escaped allow: {sel.variant_id}")
             if base != m["id"]:
                 raise AssertionError(
                     f"Jev preferred {base} ({tiers[base]}) over {m['id']} "
-                    f"({m['tier']}) for a {m['tier']}-tier task")
-            return f"{sel.variant_id} over {foil} @ {sel.confidence}"
+                    f"({m['tier']}) for a {m['tier']}-tier {kind} task")
+            return f"{kind}: {sel.variant_id} over {foil} @ {sel.confidence}"
         check(f"{m['id']}: reachable as a routing outcome", reach)
+        if i < len(models) - 1:
+            time.sleep(GAP)
 
 
 # ------------------------------------------------------------------ live
@@ -1021,13 +1120,18 @@ def live(reg):
     time.sleep(GAP)
 
     def ctx():
-        known = [m for m in enabled(reg) if m.get("context_tokens")]
-        big = max(m["context_tokens"] for m in known) + 1
+        known = sorted({m["context_tokens"] for m in enabled(reg)
+                        if m.get("context_tokens")})
+        expect(len(known) >= 2, "need two distinct context windows to test this")
+        # Above the smallest window, so the filter has something to drop, but
+        # not above the largest, which would leave nothing to route to.
+        threshold = known[0] + 1
         sel = select_model("summarise a very large document", stakes="low",
-                           min_context_tokens=big)
-        expect(sel.model.get("context_tokens") is None,
-               f"{sel.variant_id} has a known window smaller than {big}")
-        return f"survived min_context_tokens={big:,} -> {sel.variant_id}"
+                           min_context_tokens=threshold)
+        window = sel.model.get("context_tokens")
+        expect(window is None or window >= threshold,
+               f"{sel.variant_id} has a known window smaller than {threshold}")
+        return f"survived min_context_tokens={threshold:,} -> {sel.variant_id}"
     check("min_context_tokens is honoured end to end", ctx)
 
     time.sleep(GAP)
@@ -1054,15 +1158,26 @@ def live(reg):
     time.sleep(GAP)
 
     def bad_key():
-        saved = os.environ["JEV_API_KEY"]
-        os.environ["JEV_API_KEY"] = "jev_bogus"
+        # Swap the credential the backend in force actually reads. Clobbering
+        # JEV_API_KEY while the openrouter backend is active proves nothing:
+        # that call would succeed on the key it really uses.
+        from .client import resolve_backend
+        backend = resolve_backend()
+        names = {"native": ("MODEL_ROUTER_API_KEY", "JEV_API_KEY"),
+                 "openrouter": ("OPENROUTER_API_KEY",)}[backend]
+        saved = {k: os.environ.get(k) for k in names}
+        for k in names:
+            os.environ[k] = "jev_bogus"
         try:
             select_model("x", stakes="low")
         except JevError as e:
             expect(e.status == 401, f"expected 401, got {e.status}: {e}")
-            return "401 surfaced as JevError"
+            return f"401 surfaced as JevError on the {backend} backend"
         finally:
-            os.environ["JEV_API_KEY"] = saved
+            for k, v in saved.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
         raise AssertionError("bad key should raise")
     check("invalid key surfaces as a 401 JevError", bad_key)
 

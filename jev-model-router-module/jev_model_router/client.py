@@ -230,7 +230,12 @@ OPENROUTER_MODEL = "~typesafe/jev-latest"
 # configurable so a Jev version can be pinned, and that knob is the one place
 # where a slug like "openai/gpt-5.6-sol" could otherwise point this key at a
 # chat model — which is the thing that must not happen.
-JEV_MODEL_PREFIXES = ("~typesafe/jev",)
+#
+# Both spellings are Jev: OpenRouter marks a floating alias with a leading "~"
+# ("~typesafe/jev-latest") and serves pinned versions without it
+# ("typesafe/jev-1.13-20260917"). Accepting only the tilde form would refuse
+# every pinned version, which is the one thing the knob exists to do.
+JEV_MODEL_PREFIXES = ("~typesafe/jev", "typesafe/jev")
 
 
 def resolve_jev_model():
