@@ -411,46 +411,371 @@ def _sel(model, effort="high", vid="x@high"):
                      confidence=1.0, model=model)
 
 
-def offline_dispatch(reg):
-    from .dispatch import (DEFAULT_CLI, THINKING_BUDGET, api_key_for,
-                                    resolve_transport)
+def offline_backends(reg):
+    """The native and openrouter backends must answer the same calls."""
+    import re
+    from .client import (BACKENDS, TRANSLATORS, _completion_response,
+                                 _model_route_request, _tool_guard_request,
+                                 resolve_backend)
 
-    def no_key():
+    def precedence():
+        from . import client as _client
         saved = {k: os.environ.pop(k, None)
-                 for k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY")}
+                 for k in ("JEV_BACKEND", "MODEL_ROUTER_BACKEND")}
+        saved_cfg = _client._CONFIG
         try:
-            m = next(m for m in enabled(reg) if m["provider"] == "anthropic")
-            try:
-                serve(_sel(m), "hi", transport="api")
-            except DispatchError as e:
-                expect("ANTHROPIC_API_KEY" in str(e), f"wrong error: {e}")
-                return "names the missing key"
-            raise AssertionError("should raise")
+            # With nothing set anywhere — no env, no jev.json — the built-in
+            # default is native. What the committed file happens to say is a
+            # separate question, checked in offline_config.
+            _client._CONFIG = {}
+            expect(resolve_backend() == "native", "built-in default should be native")
+            os.environ["JEV_BACKEND"] = "openrouter"
+            expect(resolve_backend() == "openrouter", "shared env override")
+            os.environ["MODEL_ROUTER_BACKEND"] = "native"
+            expect(resolve_backend() == "native", "scoped name should win")
+            expect(resolve_backend("openrouter") == "openrouter", "arg wins")
+            return "arg > scoped env > shared env > built-in native"
         finally:
+            _client._CONFIG = saved_cfg
             for k, v in saved.items():
+                os.environ.pop(k, None)
                 if v is not None:
                     os.environ[k] = v
-    check("api transport without a provider key fails clearly", no_key)
+    check("backend precedence is arg > scoped env > shared env > built-in default",
+          precedence)
+
+    def bad_backend():
+        try:
+            resolve_backend("carrier-pigeon")
+        except JevError as e:
+            expect("backend must be one of" in str(e), f"wrong error: {e}")
+            return f"rejected; {BACKENDS} accepted"
+        raise AssertionError("should raise")
+    check("an unknown backend is rejected", bad_backend)
+
+    def every_path_translatable():
+        # Every endpoint this module posts to needs a translation, or the
+        # openrouter backend is silently half-working.
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "router.py")).read()
+        paths = set(re.findall(r'post\(\s*"([^"]+)"', src))
+        expect(paths, "found no post() paths in router.py")
+        missing = sorted(paths - set(TRANSLATORS))
+        expect(not missing, f"no openrouter translation for {missing}")
+        return f"all {len(paths)} endpoints translate"
+    check("every endpoint the router calls has an openrouter translation",
+          every_path_translatable)
+
+    def candidates_survive_translation():
+        cands = candidates(reg)
+        state, questions = _model_route_request({
+            "task": "x", "stakes": "low", "priorities": ["cost"],
+            "candidates": cands})
+        q = questions["decision"]
+        expect(q["type"] == "choice", "model-route must become a choice")
+        expect(set(q["criteria"]) == {c["id"] for c in cands},
+               "a candidate was lost in translation")
+        for c in cands:
+            text = q["criteria"][c["id"]]
+            expect(c["description"] in text, f"{c['id']}: description dropped")
+            # cost and latency are separate fields natively; the generic
+            # endpoint takes one string, so they must be folded in, not lost.
+            for k in ("cost", "latency"):
+                expect(c[k] in text, f"{c['id']}: {k} dropped in translation")
+        expect(state["task"] == "x" and state["stakes"] == "low",
+               "state lost the task or stakes")
+        return f"{len(cands)} candidates keep id, description, cost, latency"
+    check("model-route translation keeps every candidate and its facts",
+          candidates_survive_translation)
+
+    def presets_keep_their_options():
+        _, guard = _tool_guard_request({"tool": "bash", "action": "rm -rf x"})
+        expect(set(guard["decision"]["criteria"]) ==
+               {"allow", "confirm", "review", "deny"},
+               "tool-guard lost one of its four verdicts")
+        expect(guard["risk"]["type"] == "score", "risk must stay a score")
+        out = _completion_response(
+            {"status": {"choice": "verify_more", "confidence": 0.5,
+                        "probabilities": {"verify_more": 0.7}},
+             "is_complete": {"noul": 0.62}}, {})
+        expect(out["decision"] == "verify_more", "completion lost its decision")
+        expect(out["completion_probability"] == 0.62,
+               "completion_probability not rebuilt from is_complete")
+        expect(out["guidance"] == "" and
+               out["guidance_source"] == "unavailable_on_openrouter",
+               "guidance must be empty and say why, not be invented")
+        return "presets keep their options and flattened keys"
+    check("preset translations keep their options and rebuild the flat keys",
+          presets_keep_their_options)
+
+    def key_reaches_jev_only():
+        from .client import JEV_MODEL_PREFIXES, resolve_jev_model
+        saved = {k: os.environ.pop(k, None)
+                 for k in ("JEV_OPENROUTER_MODEL",
+                           "MODEL_ROUTER_OPENROUTER_MODEL")}
+        try:
+            expect(resolve_jev_model().startswith(JEV_MODEL_PREFIXES),
+                   "the default model is not a Jev model")
+            # The one configurable knob must not become a way to spend this key
+            # on a chat model.
+            for slug in ("openai/gpt-5.6-sol", "anthropic/claude-opus-5",
+                         "anthropic/claude-haiku-4.5"):
+                os.environ["JEV_OPENROUTER_MODEL"] = slug
+                try:
+                    resolve_jev_model()
+                except JevError as e:
+                    expect("not a Jev decisions model" in str(e),
+                           f"{slug}: wrong error: {e}")
+                    continue
+                raise AssertionError(f"{slug} should be refused")
+            os.environ["JEV_OPENROUTER_MODEL"] = "~typesafe/jev-1.13-20260917"
+            expect(resolve_jev_model() == "~typesafe/jev-1.13-20260917",
+                   "a pinned Jev version should be allowed")
+            return "Claude and GPT slugs refused; pinned Jev versions allowed"
+        finally:
+            for k, v in saved.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+    check("the OpenRouter key cannot be pointed at a chat model",
+          key_reaches_jev_only)
+
+    def no_key():
+        saved = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            from .client import _openrouter_post
+            _openrouter_post("/api/v1/decisions", {"state": {}, "questions": {}},
+                             timeout=5, retries=1)
+        except JevError as e:
+            expect("OPENROUTER_API_KEY" in str(e), f"wrong error: {e}")
+            return "names the missing key"
+        finally:
+            if saved is not None:
+                os.environ["OPENROUTER_API_KEY"] = saved
+        raise AssertionError("should raise")
+    check("the openrouter backend without a key fails clearly", no_key)
+
+
+def offline_config(module):
+    """The project-root jev.json decides each module's path, and holds no keys."""
+    import json as _json
+    import tempfile
+    import re
+    from .client import CONFIG_NAME, PKG_DIR as PKG, load_config, setting_source
+    from . import client as _client
+
+    def reads_the_root_file():
+        config = load_config()
+        expect(config, f"no {CONFIG_NAME} found from {os.getcwd()}")
+        expect(module in (config.get("modules") or {}),
+               f"{CONFIG_NAME} has no entry for {module!r}")
+        return f"{CONFIG_NAME} names this module"
+    check(f"the project-root {CONFIG_NAME} is found and names this module",
+          reads_the_root_file)
+
+    def file_decides_when_env_is_silent():
+        saved_env = {k: os.environ.pop(k, None)
+                     for k in (f"{module.upper()}_BACKEND", "JEV_BACKEND")}
+        saved_cfg = _client._CONFIG
+        try:
+            _client._CONFIG = {"backend": "native",
+                               "modules": {module: {"backend": "openrouter"}}}
+            value, source = setting_source("BACKEND", "native")
+            expect(value == "openrouter", f"module entry ignored, got {value!r}")
+            expect(f"modules.{module}" in source, f"wrong source: {source}")
+
+            _client._CONFIG = {"backend": "openrouter"}
+            value, source = setting_source("BACKEND", "native")
+            expect(value == "openrouter", "top-level backend ignored")
+
+            # Environment still wins, so a one-off run never edits a
+            # committed file.
+            os.environ["JEV_BACKEND"] = "native"
+            value, source = setting_source("BACKEND", "native")
+            expect(value == "native" and source == "$JEV_BACKEND",
+                   f"env should beat the file, got {value!r} from {source}")
+            return "modules.<module> > top level, and env beats both"
+        finally:
+            _client._CONFIG = saved_cfg
+            for k, v in saved_env.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+    check("the root file decides, and the environment overrides it",
+          file_decides_when_env_is_silent)
+
+    def reserved_keys_are_not_settings():
+        # jev.json's "modules" table is structure, not a setting -- and one
+        # module's setting really is called MODULES, so a lookup for it must
+        # not come back holding the table.
+        saved = _client._CONFIG
+        try:
+            _client._CONFIG = {"modules": {"whatever": {"backend": "native"}}}
+            value, source = setting_source("MODULES", "fallback")
+            expect(value == "fallback",
+                   f"the modules table was read as a setting: {value!r}")
+            return "the modules table is never mistaken for a setting"
+        finally:
+            _client._CONFIG = saved
+    check("structural keys in the config are not settings",
+          reserved_keys_are_not_settings)
+
+    def no_bare_env_reads():
+        # Every setting goes through the resolver, so jev.json and the scoped
+        # names work for all of them. A bare os.environ.get would silently
+        # bypass both.
+        import glob
+        allowed = {"OPENROUTER_API_KEY"}   # a secret; the committed file refuses it
+        offenders = []
+        for path in glob.glob(os.path.join(PKG, "*.py")):
+            if os.path.basename(path) in ("verify.py",):
+                continue
+            src = open(path).read()
+            for name in re.findall(r'os\.environ(?:\.get)?[\(\[]"([A-Z_]+)"', src):
+                if name not in allowed:
+                    offenders.append(f"{os.path.basename(path)}:{name}")
+        expect(not offenders, f"settings read straight from the env: {offenders}")
+        return "every setting goes through the resolver"
+    check("no setting bypasses the resolver", no_bare_env_reads)
+
+    def registry_path_resolves():
+        from .registry import registry_path
+        saved_env = {k: os.environ.pop(k, None)
+                     for k in ("MODEL_ROUTER_MODELS", "JEV_MODELS")}
+        saved_cfg = _client._CONFIG
+        try:
+            _client._CONFIG = {}
+            path, source = registry_path()
+            expect(path.endswith("models.json"), f"unexpected default: {path}")
+            _client._CONFIG = {"modules": {"jev_model_router":
+                                           {"models": "/from/file.json"}}}
+            expect(registry_path()[0] == "/from/file.json", "jev.json ignored")
+            os.environ["JEV_MODELS"] = "/from/env.json"
+            expect(registry_path()[0] == "/from/env.json", "env should win")
+            expect(registry_path("/explicit.json")[0] == "/explicit.json",
+                   "an explicit path should win over everything")
+            return "argument > env > jev.json > shipped models.json"
+        finally:
+            _client._CONFIG = saved_cfg
+            for k, v in saved_env.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+    check("the registry file resolves like every other setting",
+          registry_path_resolves)
+
+    def timeout_resolves():
+        from .dispatch import DEFAULT_CLI_TIMEOUT, cli_timeout
+        saved_env = {k: os.environ.pop(k, None)
+                     for k in ("MODEL_ROUTER_CLI_TIMEOUT", "JEV_CLI_TIMEOUT")}
+        saved_cfg = _client._CONFIG
+        try:
+            _client._CONFIG = {}
+            expect(cli_timeout() == DEFAULT_CLI_TIMEOUT, "default timeout changed")
+            _client._CONFIG = {"cli_timeout": 42}
+            expect(cli_timeout() == 42, "jev.json ignored for the timeout")
+            os.environ["JEV_CLI_TIMEOUT"] = "77"
+            expect(cli_timeout() == 77, "env should win")
+            os.environ["JEV_CLI_TIMEOUT"] = "soon"
+            try:
+                cli_timeout()
+            except DispatchError as e:
+                expect("whole number" in str(e), f"wrong error: {e}")
+            else:
+                raise AssertionError("a non-numeric timeout should be refused")
+            return "argument-free resolution, and a bad value is refused"
+        finally:
+            _client._CONFIG = saved_cfg
+            for k, v in saved_env.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+    check("the CLI timeout resolves like every other setting", timeout_resolves)
+
+    def refuses_committed_secrets():
+        # jev.json is checked in, so a key in it would be committed.
+        saved = _client._CONFIG
+        for bad in ({"api_key": "jev_x"},
+                    {"modules": {module: {"api_key": "jev_x"}}},
+                    {"token": "x"}):
+            d = tempfile.mkdtemp()
+            path = os.path.join(d, CONFIG_NAME)
+            with open(path, "w") as f:
+                _json.dump(bad, f)
+            cwd = os.getcwd()
+            try:
+                _client._CONFIG = None
+                os.chdir(d)
+                load_config()
+            except JevError as e:
+                expect("committed" in str(e) or ".env" in str(e),
+                       f"wrong error: {e}")
+                continue
+            finally:
+                os.chdir(cwd)
+                _client._CONFIG = saved
+            raise AssertionError(f"{bad} should be refused")
+        return "a credential in the checked-in file is refused"
+    check(f"{CONFIG_NAME} refuses credentials", refuses_committed_secrets)
+
+
+def offline_settings(module):
+    """The root .env can answer a setting per module or once for all of them."""
+    from .client import MODULE, SCOPE, setting
+
+    def scoped_wins():
+        shared, scoped = "JEV_VERIFY_PROBE", f"{SCOPE}_VERIFY_PROBE"
+        saved = {k: os.environ.pop(k, None) for k in (shared, scoped)}
+        try:
+            expect(setting("VERIFY_PROBE", "fallback") == "fallback",
+                   "default should apply when neither name is set")
+            os.environ[shared] = "shared"
+            expect(setting("VERIFY_PROBE") == "shared", "shared name not read")
+            os.environ[scoped] = "scoped"
+            expect(setting("VERIFY_PROBE") == "scoped",
+                   f"{scoped} should beat {shared}")
+            return f"{scoped} > {shared} > default"
+        finally:
+            for k, v in saved.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+    check("a setting resolves module-scoped name first, then the shared one",
+          scoped_wins)
+
+    def module_name():
+        expect(MODULE == module, f"MODULE is {MODULE!r}, expected {module!r}")
+        expect(not SCOPE.startswith("JEV_"),
+               f"the scoped prefix {SCOPE}_ reads like a shared JEV_ name")
+        return f"scoped prefix is {SCOPE}_"
+    check("the module owns a distinct settings prefix", module_name)
+
+
+def offline_dispatch(reg):
+    from .dispatch import DEFAULT_CLI, resolve_transport
 
     def unknown_provider():
-        for t, want in (("cli", "no CLI configured"), ("api", "no api adapter")):
-            try:
-                serve(_sel({"provider": "acme"}), "hi", transport=t)
-            except DispatchError as e:
-                expect(want in str(e), f"{t}: wrong error: {e}")
-                continue
-            raise AssertionError(f"{t}: should raise")
-        return "both transports name the gap"
-    check("unknown provider fails clearly on both transports", unknown_provider)
+        # openrouter needs no per-provider adapter, so an unknown provider is
+        # only ever a slug that OpenRouter will reject; the cli transport is
+        # the one that must know the provider up front.
+        try:
+            serve(_sel({"provider": "acme", "id": "acme-1"}), "hi", transport="cli")
+        except DispatchError as e:
+            expect("no CLI configured" in str(e), f"wrong error: {e}")
+            return "names the gap"
+        raise AssertionError("should raise")
+    check("unknown provider fails clearly on the cli transport", unknown_provider)
 
     def precedence():
         saved = os.environ.pop("JEV_DISPATCH", None)
         try:
             expect(resolve_transport({}) == "cli", "default should be cli")
-            expect(resolve_transport({"transport": "api"}) == "api", "model override")
-            expect(resolve_transport({"transport": "api"}, "cli") == "cli", "arg wins")
-            os.environ["JEV_DISPATCH"] = "api"
-            expect(resolve_transport({}) == "api", "env override")
+            expect(resolve_transport({"transport": "cli"}) == "cli",
+                   "model override")
+            expect(resolve_transport({"transport": "cli"}, "cli") == "cli",
+                   "arg wins")
+            os.environ["JEV_DISPATCH"] = "cli"
+            expect(resolve_transport({}) == "cli", "env override")
             return "arg > env > model > cli"
         finally:
             os.environ.pop("JEV_DISPATCH", None)
@@ -459,12 +784,18 @@ def offline_dispatch(reg):
     check("transport precedence is arg > env > model > cli default", precedence)
 
     def bad_transport():
-        try:
-            serve(_sel({"provider": "anthropic"}), "hi", transport="pigeon")
-        except DispatchError as e:
-            expect("transport must be one of" in str(e), f"wrong error: {e}")
-            return "rejected"
-        raise AssertionError("should raise")
+        # "api" and "openrouter" are included on purpose: both HTTP paths to a
+        # model were removed, and a caller still asking for one must be told
+        # so rather than quietly falling back to the cli.
+        for name in ("pigeon", "api", "openrouter"):
+            try:
+                serve(_sel({"provider": "anthropic"}), "hi", transport=name)
+            except DispatchError as e:
+                expect("transport must be one of" in str(e),
+                       f"{name}: wrong error: {e}")
+                continue
+            raise AssertionError(f"{name}: should raise")
+        return "unknown and removed transports both rejected"
     check("unknown transport rejected", bad_transport)
 
     def key_on_cli():
@@ -472,25 +803,11 @@ def offline_dispatch(reg):
             serve(_sel({"provider": "anthropic"}), "hi", transport="cli",
                   api_key="sk-test")
         except DispatchError as e:
-            expect("only used by the api transport" in str(e), f"wrong error: {e}")
+            expect("no transport here takes an api_key" in str(e),
+                   f"wrong error: {e}")
             return "api_key not silently ignored"
         raise AssertionError("should raise")
-    check("api_key passed to the cli transport is rejected", key_on_cli)
-
-    def key_precedence():
-        saved = os.environ.pop("ANTHROPIC_API_KEY", None)
-        try:
-            m = {"provider": "anthropic"}
-            expect(api_key_for(m, "explicit") == "explicit", "explicit should win")
-            os.environ["ANTHROPIC_API_KEY"] = "from-env"
-            expect(api_key_for(m) == "from-env", "env fallback")
-            expect(api_key_for(m, "explicit") == "explicit", "explicit still wins")
-            return "explicit > env"
-        finally:
-            os.environ.pop("ANTHROPIC_API_KEY", None)
-            if saved is not None:
-                os.environ["ANTHROPIC_API_KEY"] = saved
-    check("api_key resolution prefers the explicit argument", key_precedence)
+    check("api_key passed to serve() is rejected outright", key_on_cli)
 
     def effort_flags():
         for provider, cfg in DEFAULT_CLI.items():
@@ -503,12 +820,8 @@ def offline_dispatch(reg):
             for a in argv:
                 expect(" " not in a.strip() or "=" in a,
                        f"{provider} builds a malformed argv element: {a!r}")
-        for e in ("low", "medium", "high", "xhigh", "max"):
-            expect(e in THINKING_BUDGET, f"no thinking budget for {e}")
-        expect(THINKING_BUDGET["max"] >= THINKING_BUDGET["high"] >= THINKING_BUDGET["low"],
-               "thinking budgets not monotonic")
-        return "argv templates well-formed, budgets monotonic"
-    check("effort reaches both transports", effort_flags)
+        return "argv templates well-formed"
+    check("effort reaches the cli transport", effort_flags)
 
     def codex_argv():
         cfg = DEFAULT_CLI["openai"]
@@ -517,6 +830,71 @@ def offline_dispatch(reg):
                f"codex effort argv is {argv}; -c and its value must be separate")
         return "-c and key=value are separate argv elements"
     check("codex effort flag splits into two argv elements", codex_argv)
+
+    def every_model_has_a_cli():
+        from .dispatch import _cli_config
+        for m in enabled(reg):
+            cfg = _cli_config(m)
+            expect(cfg.get("command"), f"{m['id']}: CLI block names no command")
+        return f"all {len(enabled(reg))} models name a CLI"
+    check("every model is reachable by some CLI", every_model_has_a_cli)
+
+    def no_key_path():
+        # The guarantee: the serving path never reads a key, and has no HTTP
+        # client to spend one with. The key names do appear in dispatch.py, but
+        # only in STRIPPED_KEY_ENV, which exists to take them away.
+        import re
+        from .dispatch import STRIPPED_KEY_ENV
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "dispatch.py")).read()
+        for name in ("api_key_for", "urlopen", "urllib"):
+            expect(name not in src, f"dispatch.py still references {name}")
+        for key in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY"):
+            expect(key in STRIPPED_KEY_ENV, f"{key} is not stripped from the CLI env")
+            for read in (f'environ.get("{key}")', f'environ["{key}"]',
+                         f"environ.get('{key}')", f"environ['{key}']"):
+                expect(read not in src, f"dispatch.py reads {key}")
+        # Nothing may be read from the environment as a credential at all.
+        reads = set(re.findall(r'environ(?:\.get)?[\(\[]"([A-Z_]+)"', src))
+        creds = {r for r in reads if "KEY" in r or "TOKEN" in r or "SECRET" in r}
+        expect(not creds, f"dispatch.py reads credentials from the env: {creds}")
+        return "reads no key, and has no HTTP client to spend one with"
+    check("the serving path reads no API key at all", no_key_path)
+
+    def cli_gets_no_keys():
+        from .dispatch import STRIPPED_KEY_ENV, cli_env
+        saved = {k: os.environ.get(k) for k in STRIPPED_KEY_ENV}
+        try:
+            for k in STRIPPED_KEY_ENV:
+                os.environ[k] = "sk-should-not-reach-the-cli"
+            env = cli_env()
+            for k in STRIPPED_KEY_ENV:
+                expect(k not in env, f"{k} reaches the model CLI")
+            # Nothing credential-shaped should survive, whatever its name.
+            left = [k for k in env if k.endswith("_API_KEY")]
+            expect(not left, f"credentials still reach the model CLI: {left}")
+            # Only the keys go; the CLI still needs the rest of the environment
+            # to find its own binary and its own logged-in session.
+            expect(env.get("PATH") == os.environ.get("PATH"),
+                   "PATH was dropped along with the keys")
+            return f"{len(STRIPPED_KEY_ENV)} keys stripped, the rest kept"
+        finally:
+            for k, v in saved.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+    check("no API key reaches the model CLI's environment", cli_gets_no_keys)
+
+    def cli_call_passes_the_filtered_env():
+        # The filter is worthless if serve() forgets to pass it.
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "dispatch.py")).read()
+        run = src[src.index("proc = subprocess.run("):]
+        expect("env=cli_env()" in run[:300],
+               "subprocess.run does not pass the filtered environment")
+        return "subprocess.run(env=cli_env())"
+    check("the cli call actually uses the stripped environment",
+          cli_call_passes_the_filtered_env)
 
     def binary_resolution():
         from .dispatch import resolve_command
@@ -527,14 +905,6 @@ def offline_dispatch(reg):
             expect(os.access(found, os.X_OK), f"{provider}: {found} not executable")
         return "resolves PATH then fallback paths"
     check("CLI binaries resolve via PATH or fallback paths", binary_resolution)
-
-    def every_effort_mappable():
-        declared = {e for m in enabled(reg) for e in m["efforts"]}
-        for e in declared:
-            expect(e in THINKING_BUDGET, f"effort {e!r} has no api mapping")
-        return f"all {len(declared)} declared efforts map to the api transport"
-    check("every declared effort is dispatchable", every_effort_mappable)
-
 
 # ---------------------------------------------------- per-model coverage
 
@@ -709,6 +1079,9 @@ def main():
 
     reg = load_registry()
     offline(reg)
+    offline_settings("jev_model_router")
+    offline_config("jev_model_router")
+    offline_backends(reg)
     if args.models or args.all:
         per_model(reg, smoke=not args.no_smoke)
     if args.live or args.all:

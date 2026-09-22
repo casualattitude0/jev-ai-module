@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Verification suite for the workflow router.
 
-    python3 -m wfrouter.verify          # offline: registry, interfaces, parsing
-    python3 -m wfrouter.verify --live   # also route real requests through Jev
+    python3 -m jev_workflow.verify          # offline: registry, interfaces, parsing
+    python3 -m jev_workflow.verify --live   # also route real requests through Jev
 
 The offline layer must always be green. --live depends on the Jev API and on
 the descriptions being good enough to separate neighbouring workflows.
@@ -88,6 +88,264 @@ def _write(root, wid, **fields):
     m.update(fields)
     with open(path, "w") as f:
         json.dump(m, f)
+
+
+def offline_backends():
+    """This module asks only generic decisions; both backends speak them."""
+    from .client import BACKENDS, GENERIC_PATH, _openrouter_post, resolve_backend
+
+    def precedence():
+        from . import client as _client
+        saved = {k: os.environ.pop(k, None)
+                 for k in ("JEV_BACKEND", "WORKFLOW_BACKEND")}
+        saved_cfg = _client._CONFIG
+        try:
+            # With nothing set anywhere — no env, no jev.json — the built-in
+            # default is native. What the committed file happens to say is a
+            # separate question, checked in offline_config.
+            _client._CONFIG = {}
+            expect(resolve_backend() == "native", "built-in default should be native")
+            os.environ["JEV_BACKEND"] = "openrouter"
+            expect(resolve_backend() == "openrouter", "shared env override")
+            os.environ["WORKFLOW_BACKEND"] = "native"
+            expect(resolve_backend() == "native", "scoped name should win")
+            expect(resolve_backend("openrouter") == "openrouter", "arg wins")
+            return "arg > scoped env > shared env > built-in native"
+        finally:
+            _client._CONFIG = saved_cfg
+            for k, v in saved.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+    check("backend precedence is arg > scoped env > shared env > built-in default",
+          precedence)
+
+    def bad_backend():
+        try:
+            resolve_backend("carrier-pigeon")
+        except JevError as e:
+            expect("backend must be one of" in str(e), f"wrong error: {e}")
+            return f"rejected; {BACKENDS} accepted"
+        raise AssertionError("should raise")
+    check("an unknown backend is rejected", bad_backend)
+
+    def only_generic():
+        # A preset path would silently mean something else on OpenRouter, so
+        # it must be refused rather than sent.
+        try:
+            _openrouter_post("/api/v1/decisions/model-route", {}, timeout=5,
+                             retries=1)
+        except JevError as e:
+            expect("generic decisions endpoint" in str(e), f"wrong error: {e}")
+            return f"only {GENERIC_PATH} is sent"
+        raise AssertionError("should raise")
+    check("a non-generic path is refused on the openrouter backend", only_generic)
+
+    def key_reaches_jev_only():
+        from .client import JEV_MODEL_PREFIXES, resolve_jev_model
+        saved = {k: os.environ.pop(k, None)
+                 for k in ("JEV_OPENROUTER_MODEL", "WORKFLOW_OPENROUTER_MODEL")}
+        try:
+            expect(resolve_jev_model().startswith(JEV_MODEL_PREFIXES),
+                   "the default model is not a Jev model")
+            for slug in ("openai/gpt-5.6-sol", "anthropic/claude-opus-5"):
+                os.environ["JEV_OPENROUTER_MODEL"] = slug
+                try:
+                    resolve_jev_model()
+                except JevError as e:
+                    expect("not a Jev decisions model" in str(e),
+                           f"{slug}: wrong error: {e}")
+                    continue
+                raise AssertionError(f"{slug} should be refused")
+            return "Claude and GPT slugs refused"
+        finally:
+            for k, v in saved.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+    check("the OpenRouter key cannot be pointed at a chat model",
+          key_reaches_jev_only)
+
+    def no_key():
+        saved = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            _openrouter_post(GENERIC_PATH, {"state": {}, "questions": {}},
+                             timeout=5, retries=1)
+        except JevError as e:
+            expect("OPENROUTER_API_KEY" in str(e), f"wrong error: {e}")
+            return "names the missing key"
+        finally:
+            if saved is not None:
+                os.environ["OPENROUTER_API_KEY"] = saved
+        raise AssertionError("should raise")
+    check("the openrouter backend without a key fails clearly", no_key)
+
+
+def offline_config(module):
+    """The project-root jev.json decides each module's path, and holds no keys."""
+    import json as _json
+    import tempfile
+    import re
+    from .client import CONFIG_NAME, PKG_DIR as PKG, load_config, setting_source
+    from . import client as _client
+
+    def reads_the_root_file():
+        config = load_config()
+        expect(config, f"no {CONFIG_NAME} found from {os.getcwd()}")
+        expect(module in (config.get("modules") or {}),
+               f"{CONFIG_NAME} has no entry for {module!r}")
+        return f"{CONFIG_NAME} names this module"
+    check(f"the project-root {CONFIG_NAME} is found and names this module",
+          reads_the_root_file)
+
+    def file_decides_when_env_is_silent():
+        saved_env = {k: os.environ.pop(k, None)
+                     for k in (f"{module.upper()}_BACKEND", "JEV_BACKEND")}
+        saved_cfg = _client._CONFIG
+        try:
+            _client._CONFIG = {"backend": "native",
+                               "modules": {module: {"backend": "openrouter"}}}
+            value, source = setting_source("BACKEND", "native")
+            expect(value == "openrouter", f"module entry ignored, got {value!r}")
+            expect(f"modules.{module}" in source, f"wrong source: {source}")
+
+            _client._CONFIG = {"backend": "openrouter"}
+            value, source = setting_source("BACKEND", "native")
+            expect(value == "openrouter", "top-level backend ignored")
+
+            # Environment still wins, so a one-off run never edits a
+            # committed file.
+            os.environ["JEV_BACKEND"] = "native"
+            value, source = setting_source("BACKEND", "native")
+            expect(value == "native" and source == "$JEV_BACKEND",
+                   f"env should beat the file, got {value!r} from {source}")
+            return "modules.<module> > top level, and env beats both"
+        finally:
+            _client._CONFIG = saved_cfg
+            for k, v in saved_env.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+    check("the root file decides, and the environment overrides it",
+          file_decides_when_env_is_silent)
+
+    def reserved_keys_are_not_settings():
+        # jev.json's "modules" table is structure, not a setting -- and one
+        # module's setting really is called MODULES, so a lookup for it must
+        # not come back holding the table.
+        saved = _client._CONFIG
+        try:
+            _client._CONFIG = {"modules": {"whatever": {"backend": "native"}}}
+            value, source = setting_source("MODULES", "fallback")
+            expect(value == "fallback",
+                   f"the modules table was read as a setting: {value!r}")
+            return "the modules table is never mistaken for a setting"
+        finally:
+            _client._CONFIG = saved
+    check("structural keys in the config are not settings",
+          reserved_keys_are_not_settings)
+
+    def no_bare_env_reads():
+        # Every setting goes through the resolver, so jev.json and the scoped
+        # names work for all of them. A bare os.environ.get would silently
+        # bypass both.
+        import glob
+        allowed = {"OPENROUTER_API_KEY"}   # a secret; the committed file refuses it
+        offenders = []
+        for path in glob.glob(os.path.join(PKG, "*.py")):
+            if os.path.basename(path) in ("verify.py",):
+                continue
+            src = open(path).read()
+            for name in re.findall(r'os\.environ(?:\.get)?[\(\[]"([A-Z_]+)"', src):
+                if name not in allowed:
+                    offenders.append(f"{os.path.basename(path)}:{name}")
+        expect(not offenders, f"settings read straight from the env: {offenders}")
+        return "every setting goes through the resolver"
+    check("no setting bypasses the resolver", no_bare_env_reads)
+
+    def workflows_dir_resolves():
+        from .registry import workflows_source
+        saved_env = {k: os.environ.pop(k, None)
+                     for k in ("WORKFLOW_MODULES", "JEV_MODULES")}
+        saved_cfg = _client._CONFIG
+        try:
+            _client._CONFIG = {}
+            path, source = workflows_source()
+            expect(path.endswith("workflows"), f"unexpected default: {path}")
+            _client._CONFIG = {"modules": {"jev_workflow": {"modules": "/from/file"}}}
+            expect(workflows_source()[0] == "/from/file", "jev.json ignored")
+            # The documented name is unchanged by the rename: it is exactly
+            # this module's scoped prefix plus the setting name.
+            os.environ["WORKFLOW_MODULES"] = "/from/env"
+            expect(workflows_source()[0] == "/from/env",
+                   "WORKFLOW_MODULES stopped working")
+            return "WORKFLOW_MODULES > JEV_MODULES > jev.json > shipped workflows/"
+        finally:
+            _client._CONFIG = saved_cfg
+            for k, v in saved_env.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+    check("the workflows directory resolves like every other setting",
+          workflows_dir_resolves)
+
+    def refuses_committed_secrets():
+        # jev.json is checked in, so a key in it would be committed.
+        saved = _client._CONFIG
+        for bad in ({"api_key": "jev_x"},
+                    {"modules": {module: {"api_key": "jev_x"}}},
+                    {"token": "x"}):
+            d = tempfile.mkdtemp()
+            path = os.path.join(d, CONFIG_NAME)
+            with open(path, "w") as f:
+                _json.dump(bad, f)
+            cwd = os.getcwd()
+            try:
+                _client._CONFIG = None
+                os.chdir(d)
+                load_config()
+            except JevError as e:
+                expect("committed" in str(e) or ".env" in str(e),
+                       f"wrong error: {e}")
+                continue
+            finally:
+                os.chdir(cwd)
+                _client._CONFIG = saved
+            raise AssertionError(f"{bad} should be refused")
+        return "a credential in the checked-in file is refused"
+    check(f"{CONFIG_NAME} refuses credentials", refuses_committed_secrets)
+
+
+def offline_settings(module):
+    """The root .env can answer a setting per module or once for all of them."""
+    from .client import MODULE, SCOPE, setting
+
+    def scoped_wins():
+        shared, scoped = "JEV_VERIFY_PROBE", f"{SCOPE}_VERIFY_PROBE"
+        saved = {k: os.environ.pop(k, None) for k in (shared, scoped)}
+        try:
+            expect(setting("VERIFY_PROBE", "fallback") == "fallback",
+                   "default should apply when neither name is set")
+            os.environ[shared] = "shared"
+            expect(setting("VERIFY_PROBE") == "shared", "shared name not read")
+            os.environ[scoped] = "scoped"
+            expect(setting("VERIFY_PROBE") == "scoped",
+                   f"{scoped} should beat {shared}")
+            return f"{scoped} > {shared} > default"
+        finally:
+            for k, v in saved.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+    check("a setting resolves module-scoped name first, then the shared one",
+          scoped_wins)
+
+    def module_name():
+        expect(MODULE == module, f"MODULE is {MODULE!r}, expected {module!r}")
+        expect(not SCOPE.startswith("JEV_"),
+               f"the scoped prefix {SCOPE}_ reads like a shared JEV_ name")
+        return f"scoped prefix is {SCOPE}_"
+    check("the module owns a distinct settings prefix", module_name)
 
 
 def offline(reg):
@@ -481,6 +739,9 @@ def main():
 
     print(f"workflow router checks ({len(reg['workflows'])} workflows)")
     offline(reg)
+    offline_settings("jev_workflow")
+    offline_config("jev_workflow")
+    offline_backends()
 
     if "--live" in sys.argv or "--all" in sys.argv:
         shape = (True if "--two-step" in sys.argv else

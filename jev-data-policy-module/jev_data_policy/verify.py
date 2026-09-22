@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Verification suite for the data policy module.
 
-    python3 -m jevpolicy.verify
+    python3 -m jev_data_policy.verify
 
 Offline only: this module makes no network calls by design.
 """
@@ -12,9 +12,10 @@ import sys
 import tempfile
 
 from . import policy as P
-from .policy import (ExternalLeakError, NotApprovedError, PolicyError,
-                     approved_targets, assert_service, assert_target,
-                     guarded_call, load, rank, require_targets)
+from .policy import (CONFIG_NAME, ExternalLeakError, NotApprovedError,
+                     PolicyError, approved_targets, assert_service,
+                     assert_target, guarded_call, load, load_config,
+                     policy_path, rank, require_targets, setting_source)
 
 PASS, FAIL = [], []
 
@@ -227,11 +228,93 @@ def main():
 
     def no_imports():
         src = open(os.path.join(P.PKG_DIR, "policy.py")).read()
-        for name in ("jevagentrouter", "requests", "httpx", "urllib"):
+        for name in ("jev_model_router", "requests", "httpx", "urllib"):
             expect(f"import {name}" not in src,
                    f"policy.py imports {name}; it must stay standalone")
         return "no consumer or network imports"
     check("the module stays standalone", no_imports)
+
+    def dotenv_is_loaded():
+        # This module read os.environ but never loaded .env, so the
+        # JEV_DATA_POLICY that .env.example documents silently did nothing.
+        src = open(os.path.join(P.PKG_DIR, "policy.py")).read()
+        expect("load_dotenv()" in src, "policy.py never loads .env")
+        return ".env is loaded on import, like every other module here"
+    check("the module reads the project's .env", dotenv_is_loaded)
+
+    def named_in_the_root_config():
+        config = load_config()
+        expect(config, f"no {CONFIG_NAME} found from {os.getcwd()}")
+        entry = (config.get("modules") or {}).get("jev_data_policy")
+        expect(entry is not None,
+               f"{CONFIG_NAME} does not name this module; someone reading it "
+               f"at the project root would not know this module exists")
+        expect("backend" not in entry,
+               "this module makes no Jev calls and must not claim a backend")
+        return f"{CONFIG_NAME} names it, with no backend to choose"
+    check(f"the project-root {CONFIG_NAME} names this module", named_in_the_root_config)
+
+    def resolution_order():
+        saved_env = {k: os.environ.pop(k, None)
+                     for k in ("DATA_POLICY_DATA_POLICY", "JEV_DATA_POLICY")}
+        saved_cfg = P._CONFIG
+        try:
+            P._CONFIG = {}
+            path, source = policy_path()
+            expect(path == os.path.join(P.PKG_DIR, "policy.json"),
+                   f"the shipped policy should be the fallback, got {path}")
+
+            P._CONFIG = {"modules": {"jev_data_policy": {"data_policy": "/from/file.json"}}}
+            path, source = policy_path()
+            expect(path == "/from/file.json", f"the root file was ignored: {path}")
+            expect("modules.jev_data_policy" in source, f"wrong source: {source}")
+
+            os.environ["JEV_DATA_POLICY"] = "/from/shared-env.json"
+            expect(policy_path()[0] == "/from/shared-env.json",
+                   "env should beat the file")
+            os.environ["DATA_POLICY_DATA_POLICY"] = "/from/scoped-env.json"
+            expect(policy_path()[0] == "/from/scoped-env.json",
+                   "the scoped name should win")
+            return "scoped env > shared env > jev.json > shipped policy"
+        finally:
+            P._CONFIG = saved_cfg
+            for k, v in saved_env.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+    check("the policy in force resolves in the documented order", resolution_order)
+
+    def no_bare_env_reads():
+        import glob, re
+        offenders = []
+        for path in glob.glob(os.path.join(P.PKG_DIR, "*.py")):
+            if os.path.basename(path) == "verify.py":
+                continue
+            src = open(path).read()
+            offenders += [f"{os.path.basename(path)}:{n}" for n in
+                          re.findall(r'os\.environ(?:\.get)?[\(\[]"([A-Z_]+)"', src)]
+        expect(not offenders, f"settings read straight from the env: {offenders}")
+        return "every setting goes through the resolver"
+    check("no setting bypasses the resolver", no_bare_env_reads)
+
+    def refuses_committed_secrets():
+        saved = P._CONFIG
+        d = tempfile.mkdtemp()
+        with open(os.path.join(d, CONFIG_NAME), "w") as f:
+            json.dump({"api_key": "jev_x"}, f)
+        cwd = os.getcwd()
+        try:
+            P._CONFIG = None
+            os.chdir(d)
+            load_config()
+        except PolicyError as e:
+            expect("committed" in str(e) or ".env" in str(e), f"wrong error: {e}")
+            return "a credential in the checked-in file is refused"
+        finally:
+            os.chdir(cwd)
+            P._CONFIG = saved
+        raise AssertionError("should raise")
+    check(f"{CONFIG_NAME} refuses credentials", refuses_committed_secrets)
 
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed")
     for name, err in FAIL:
