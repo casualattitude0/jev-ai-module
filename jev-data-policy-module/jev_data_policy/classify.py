@@ -195,8 +195,16 @@ def classify(content, *, context=None, min_confidence=0.0, spec=None,
         raise PolicyError(f"Jev returned unknown data class {decided!r}; "
                           f"expected one of {ids}")
 
-    confidence = float(ans.get("confidence") or 0.0)
-    probabilities = ans.get("probabilities") or {}
+    try:
+        confidence = float(ans.get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        raise PolicyError(f"Jev returned a non-numeric confidence "
+                          f"{ans.get('confidence')!r}") from None
+    probabilities = ans.get("probabilities")
+    if not isinstance(probabilities, dict):
+        # Unusable probabilities are no evidence for anything, which
+        # escalation already treats as the least safe moment to round down.
+        probabilities = {}
     final = decided
     if confidence < min_confidence:
         final = _escalate(decided, probabilities, spec)

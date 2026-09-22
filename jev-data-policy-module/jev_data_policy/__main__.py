@@ -27,6 +27,17 @@ def print_classes():
     return 0
 
 
+def parse_context(pairs):
+    """--context KEY=VALUE, repeatable. Anything else is a usage error, and
+    says so rather than arriving as a dict() traceback."""
+    if not pairs:
+        return None
+    for kv in pairs:
+        if "=" not in kv:
+            raise PolicyError(f"--context wants KEY=VALUE, got {kv!r}")
+    return dict(kv.split("=", 1) for kv in pairs)
+
+
 def main():
     p = argparse.ArgumentParser(add_help=True)
     p.add_argument("content", nargs="*",
@@ -48,7 +59,7 @@ def main():
             return print_classes()
 
         content = " ".join(args.content) if args.content else sys.stdin.read()
-        context = dict(kv.split("=", 1) for kv in args.context) if args.context else None
+        context = parse_context(args.context)
         result = classify(content, context=context, backend=args.backend,
                           min_confidence=args.min_confidence)
     except (PolicyError, JevError) as e:
@@ -59,7 +70,10 @@ def main():
         print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))
         return 0
 
-    backend, source = setting_source("BACKEND", "native")
+    # Report the path the call actually took: --backend overrides the
+    # resolver, so reading the resolver again would name the wrong one.
+    backend, source = ((args.backend, "--backend") if args.backend
+                       else setting_source("BACKEND", "native"))
     print(f"backend:    {backend}  (from {source})")
     print(f"content:    {result.content_bytes} bytes")
     print(f"class:      {result.data_class}")

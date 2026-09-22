@@ -175,6 +175,9 @@ def _request(url, body, headers, *, timeout, retries):
     if len(data) > 32 * 1024:
         raise JevError(f"payload is {len(data)} bytes; a decision body caps at 32 KiB")
 
+    if retries < 1:
+        raise JevError(f"retries must be at least 1, got {retries}")
+
     req = urllib.request.Request(
         url, data=data,
         headers={"Content-Type": "application/json",
