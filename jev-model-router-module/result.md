@@ -113,8 +113,52 @@ Input to all: `Reply with exactly one word: pong`
 | one call during a Jev outage | `HTTP 502` — retried with backoff, then surfaced |
 | payload over 32 KiB | rejected locally, no request sent |
 | `stakes="critical"` | `ValueError` before any HTTP call |
-| `serve(..., transport="api")` with no key | `set ANTHROPIC_API_KEY to dispatch to Anthropic models` |
-| `serve(..., transport="cli", api_key=...)` | `api_key is only used by the api transport` |
+| `JEV_BACKEND=openrouter` with no `OPENROUTER_API_KEY` | `set OPENROUTER_API_KEY to use the openrouter backend` |
+| `JEV_BACKEND=carrier-pigeon` | `backend must be one of ('native', 'openrouter')` |
+
+## Backends — the same decision, two sources
+
+Verified live on 2026-09-22 against `openrouter.ai/api/alpha/decisions`,
+model `~typesafe/jev-latest` (which resolved to `typesafe/jev-1.13-20260917`).
+
+Both modules are set to `openrouter` in the project-root `jev.json`.
+
+| input | backend | output |
+|---|---|---|
+| `redesign the payment reconciliation engine across 40 files...`, stakes high | `openrouter` | difficulty 3, code, ambiguous 0.93 → floor `tier>=deep, effort>=high, swe_bench_pro>=70` → `claude-opus-5@xhigh` @ 0.42 |
+| same task | `native` | difficulty 3, code → same floor → `claude-opus-5@xhigh` |
+| `角色的待機動作還沒做完` (workflow module) | `openrouter` | `anim-generate` @ 0.66 |
+
+Both stages go through the chosen backend: the assessment and the variant
+choice. OpenRouter serves only the generic `{state, questions}` endpoint, so
+each preset is expressed as its questions and the flattened keys are rebuilt.
+
+| endpoint | on openrouter |
+|---|---|
+| `/api/v1/decisions` | sent as-is; both backends speak it |
+| `/api/v1/decisions/model-route` | one `choice` over candidate ids, cost and latency folded into each option's text |
+| `/api/v1/decisions/tool-guard` | `choice` over allow/confirm/review/deny + `needs_confirmation` noul + `risk` score |
+| `/api/v1/decisions/completion` | `choice` over complete/verify_more/incomplete + `is_complete` noul |
+
+| difference | why |
+|---|---|
+| `guidance` empty on openrouter | its question types are `choice \| score \| noul` only; there is no free-text type, and nothing is invented locally to fill it |
+
+## Serving — CLI only, no keys
+
+Claude and GPT are never reached with an API key. Observed:
+
+| input | output |
+|---|---|
+| a child inheriting the shell env, with 3 model keys set | sees `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY` |
+| the model CLI, same shell | sees none of them — `[]` |
+| `JEV_OPENROUTER_MODEL=openai/gpt-5.6-sol` | `'openai/gpt-5.6-sol' is not a Jev decisions model` |
+| `JEV_OPENROUTER_MODEL=anthropic/claude-opus-5` | same refusal |
+| `JEV_OPENROUTER_MODEL=~typesafe/jev-1.13-20260917` | allowed — pinning a Jev version |
+| `serve(..., transport="api")` | `transport must be one of ('cli',)` |
+| `serve(..., transport="openrouter")` | `transport must be one of ('cli',)` |
+| `serve(..., api_key=...)` | `no transport here takes an api_key; serving goes through the model's own CLI` |
+| grep `dispatch.py` for `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `urlopen` | no matches — asserted by the suite |
 
 ## Registry corrections from research
 
@@ -132,9 +176,9 @@ practice. That is recorded in its `avoid_when`, not just as a note here.
 
 ## Counts
 
-    python3 -m jevagentrouter.verify              47 passed, 0 failed, 0 skipped
-    python3 -m jevagentrouter.verify --models     62 passed, 0 failed, 0 skipped
-    python3 -m jevagentrouter.verify --live       42 passed, 3 failed
+    python3 -m jev_model_router.verify              47 passed, 0 failed, 0 skipped
+    python3 -m jev_model_router.verify --models     62 passed, 0 failed, 0 skipped
+    python3 -m jev_model_router.verify --live       42 passed, 3 failed
 
 The offline count is from a run on 2026-09-22. The `--models` and `--live` counts
 predate registry v3, so they cover 16 variants, not 17, and the pre-research

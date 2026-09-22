@@ -18,7 +18,7 @@ which model suits a task; folding clearance into it made both harder to read.
 ## Use
 
 ```python
-from jevpolicy import approved_targets, assert_service, guarded_call
+from jev_data_policy import approved_targets, assert_service, guarded_call
 ```
 
 Narrow someone else's allow-list:
@@ -31,7 +31,7 @@ Or let this module do the whole guarded call. It takes the consumer as an
 argument, so neither module imports the other:
 
 ```python
-from jevagentrouter import select_model
+from jev_model_router import select_model
 
 sel = guarded_call(
     select_model,
@@ -48,9 +48,9 @@ reaches the network.
 Inspect from the shell:
 
 ```bash
-python3 -m jevpolicy                             # the whole policy
-python3 -m jevpolicy --class internal            # who is cleared
-python3 -m jevpolicy --check jevai.org internal  # one decision
+python3 -m jev_data_policy                             # the whole policy
+python3 -m jev_data_policy --class internal            # who is cleared
+python3 -m jev_data_policy --check jevai.org internal  # one decision
 ```
 
 ## Two rules that shape everything
@@ -92,7 +92,7 @@ Point `JEV_DATA_POLICY` at another file to use a different policy.
 
 ## Verify
 
-    python3 -m jevpolicy.verify
+    python3 -m jev_data_policy.verify
 
 22 offline checks. No network calls, by design — so there is no live layer to be
 flaky, and this suite is green or the module is broken.

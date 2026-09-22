@@ -19,7 +19,7 @@ Effort 與模型同時決定,因為「Sonnet 深思」和「Opus 快答」在成
 ```bash
 cp .env.example .env          # 整個 repo 一份,填入 JEV_API_KEY
 cd jev-model-router-module
-python3 -m jevagentrouter "把 billing 的重試邏輯重構掉"
+python3 -m jev_model_router "把 billing 的重試邏輯重構掉"
 ```
 
 ```
@@ -33,7 +33,7 @@ confidence: 0.63
 當成函式庫:
 
 ```python
-from jevagentrouter import select_model, serve
+from jev_model_router import select_model, serve
 
 sel = select_model("port the parser to async", stakes="high")
 print(sel.variant_id, sel.confidence)
@@ -43,6 +43,70 @@ print(serve(sel, "port the parser to async, here is the file: ..."))
 也提供 function-calling 介面(Anthropic / OpenAI 兩種格式),
 讓 agent 自己決定要不要換模型:`select_model` 只做決策,
 `route_and_serve` 決策後直接執行。
+
+決策本身有兩個 backend,回傳的形狀相同:`native` 走 Jev API(`JEV_API_KEY`),
+`openrouter` 走 OpenRouter 上的同一個 Jev 模型 `~typesafe/jev-latest`
+(`OPENROUTER_API_KEY`)。OpenRouter 只提供通用的 `{state, questions}` 端點、
+沒有 Jev 的 preset,所以每個 preset 在這裡被寫成它本來的那組問題,回程再組回
+原本的扁平欄位;唯一的差別是 OpenRouter 沒有自由文字題型,`guidance` 會是空的。
+
+決策之外,實際執行模型只有一條路:該模型自己的 CLI(`claude`、`codex`),
+用它自己登入的 session。**絕不會用 API key 呼叫 Claude 或 GPT**,三道保證:
+這裡沒有任何通往各家 API 的 HTTP 路徑、也不讀任何金鑰;呼叫 CLI 前會把環境裡
+所有 API key 清掉(CLI 找得到 `ANTHROPIC_API_KEY` 就會拿來認證,那等於繞路做
+同一件被禁止的事);`OPENROUTER_API_KEY` 只能打 Jev,每次呼叫前都會檢查 slug,
+`JEV_OPENROUTER_MODEL` 指向 `openai/*` 或 `anthropic/*` 會被拒絕。
+
+三個模組的套件目錄同一套命名:`jev-<名稱>-module/jev_<名稱>` ——
+`jev_model_router`、`jev_workflow`、`jev_data_policy`。環境變數的模組前綴
+就是套件名去掉共用的 `jev_`:`MODEL_ROUTER_*`、`WORKFLOW_*`、`DATA_POLICY_*`,
+這樣有前綴的名字不會看起來像共用的 `JEV_*`。
+
+每個模組走哪一條路,寫在根目錄的 [`jev.json`](jev.json) —— 這是專案決定,
+不是機密,所以放在看得到、進得了版控的地方,而不是藏在 `.env` 裡:
+
+```json
+{
+  "backend": "openrouter",
+  "modules": {
+    "jev_model_router": { "backend": "openrouter" },
+    "jev_workflow":       { "backend": "openrouter" }
+  }
+}
+```
+
+目前兩個模組都走 `openrouter`;把任一行改成 `native` 就只換那一個模組。
+
+每個模組的每一個設定都走同一個 resolver,不只是 backend:
+
+| 設定 | 共用名 | 模組專屬名 | `jev.json` |
+|---|---|---|---|
+| 決策走哪條路 | `JEV_BACKEND` | `MODEL_ROUTER_BACKEND` / `WORKFLOW_BACKEND` | `backend` |
+| Jev endpoint | `JEV_BASE_URL` | `MODEL_ROUTER_BASE_URL` … | `base_url` |
+| 模型登錄檔 | `JEV_MODELS` | `MODEL_ROUTER_MODELS` | `models` |
+| 工作流目錄 | `JEV_MODULES` | `WORKFLOW_MODULES` | `modules` |
+| 資料政策檔 | `JEV_DATA_POLICY` | `DATA_POLICY_DATA_POLICY` | `data_policy` |
+| CLI 逾時 | `JEV_CLI_TIMEOUT` | `MODEL_ROUTER_CLI_TIMEOUT` | `cli_timeout` |
+
+金鑰是唯一的例外,只能從 `.env` 讀:名字裡有 `key`/`token`/`secret`/`password`
+的鍵寫進 `jev.json` 會被拒絕,因為那個檔案會進版控。
+
+優先順序:參數 > `MODEL_ROUTER_BACKEND` / `WORKFLOW_BACKEND` >
+`JEV_BACKEND` > `jev.json` 的 `modules.<模組>` > `jev.json` 頂層 > 內建預設。
+環境變數贏過檔案,所以臨時跑一次不必去動一個已經 commit 的檔案;
+金鑰則相反,寫在 `jev.json` 會被拒絕(那個檔案會進 git),只能放 `.env`。
+
+每次執行都會印出這次走的是哪一條、以及這個決定從哪裡來:
+
+```
+backend:    openrouter  (from jev.json modules.jev_model_router.backend)
+```
+
+```bash
+OPENROUTER_API_KEY=sk-or-v1-...   # 放在 repo 根目錄的 .env
+JEV_BACKEND=openrouter python3 -m jev_model_router "把 billing 的重試邏輯重構掉"
+MODEL_ROUTER_BACKEND=openrouter python3 -m jev_model_router "..."   # 只有這個模組
+```
 
 純 stdlib,零依賴。詳見 [jev-model-router-module/README.md](jev-model-router-module/README.md)。
 
@@ -55,16 +119,16 @@ print(serve(sel, "port the parser to async, here is the file: ..."))
 所以它在對方看到選項之前就先移除,而不是變成評分裡的一個權重。
 
 ```bash
-python3 -m jevpolicy                             # 看整份政策
-python3 -m jevpolicy --class internal            # 誰獲准
-python3 -m jevpolicy --check jevai.org internal  # 單一判斷
+python3 -m jev_data_policy                             # 看整份政策
+python3 -m jev_data_policy --class internal            # 誰獲准
+python3 -m jev_data_policy --check jevai.org internal  # 單一判斷
 ```
 
 兩個模組互不 import。政策模組算出獲准清單,當成 router 的 `allow` 傳進去:
 
 ```python
-from jevpolicy import guarded_call
-from jevagentrouter import select_model
+from jev_data_policy import guarded_call
+from jev_model_router import select_model
 
 sel = guarded_call(select_model, data_class="internal",
                    service="jevai.org",     # 這個呼叫會把任務文字送過去
@@ -82,14 +146,14 @@ sel = guarded_call(select_model, data_class="internal",
 回傳的是**目標的接口**（指令、entry point、system prompt 路徑、需要的輸入、
 下一步是誰），讓主程式收到後自己執行 — 這個模組只決策，不執行。
 
-一個工作流是一個資料夾，被發現而不是被註冊：`wfrouter/workflows/<id>/module.json`
+一個工作流是一個資料夾，被發現而不是被註冊：`jev_workflow/workflows/<id>/module.json`
 宣告接口，之後的 system prompt、skill、tool 都住在同一格路徑裡，可以單獨維護。
 目前 33 個工作流分布在 10 個階段，全部只有接口，`implemented: false` 會一路顯示出來。
 
 ```bash
 cd jev-workflow-module
-python3 -m wfrouter "角色的待機動作還沒做完"
-python3 -m wfrouter --list
+python3 -m jev_workflow "角色的待機動作還沒做完"
+python3 -m jev_workflow --list
 ```
 
 ```
@@ -103,7 +167,7 @@ next:       /anim-generate
 目錄大到一次問不完時，路由會自動切成兩段（先選階段、再選階段內的工作流）：
 
 ```python
-from wfrouter import select_workflow
+from jev_workflow import select_workflow
 
 route = select_workflow("粒子特效要做一輪", context={"asset-audit-vfx": "missing"})
 route.interface["command"]       # '/vfx-generate'
@@ -133,11 +197,11 @@ route.interface["implemented"]   # False -> 還沒有東西可跑
 
 ```bash
 cd <module>
-python3 -m jevagentrouter.verify           # 離線,47 項,不打 API
-python3 -m jevagentrouter.verify --all     # 含實際 API 與 CLI 呼叫
-python3 -m wfrouter.verify                 # 離線,35 項
-python3 -m wfrouter.verify --live          # 再加真實路由(對限流敏感)
-python3 -m jevpolicy.verify                # 離線,22 項,沒有 live 層
+python3 -m jev_model_router.verify           # 離線,47 項,不打 API
+python3 -m jev_model_router.verify --all     # 含實際 API 與 CLI 呼叫
+python3 -m jev_workflow.verify                 # 離線,35 項
+python3 -m jev_workflow.verify --live          # 再加真實路由(對限流敏感)
+python3 -m jev_data_policy.verify                # 離線,22 項,沒有 live 層
 ```
 
 每個模組都把自己的驗證依據寫在 `result.md` 裡 —— 實際輸入、實際輸出、

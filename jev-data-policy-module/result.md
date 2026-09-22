@@ -9,7 +9,7 @@ all shipped at `public`.
 
 ## 出廠狀態 — 全部只核准 public
 
-    $ python3 -m jevpolicy
+    $ python3 -m jev_data_policy
 
     classes: public < internal < confidential < regulated
     external floor: confidential  (at or above this, outbound text must be redacted)
@@ -70,7 +70,7 @@ attributed` 把這件事釘死:任何高於 public 的核准都必須留下簽�
 
 ## Counts
 
-    python3 -m jevpolicy.verify                  22 passed, 0 failed
+    python3 -m jev_data_policy.verify                  22 passed, 0 failed
 
 22 項全離線,沒有網路呼叫,不受限流影響,所以這一層必須永遠是綠的 ——
 沒有像另外兩個模組那樣的 per-model 或 live 分層可言。

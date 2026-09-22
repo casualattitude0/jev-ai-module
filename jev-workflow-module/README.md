@@ -34,7 +34,7 @@ Stdlib only，零依賴。
 ## 一個工作流 = 一個資料夾
 
 ```
-wfrouter/workflows/
+jev_workflow/workflows/
   stages.json
   <id>/
     module.json          # 接口宣告
@@ -54,7 +54,22 @@ prompt、skill、tool，全部住在自己那一格路徑裡，互不干擾。
 ```bash
 cp .env.example .env          # repo 根目錄那一份,填入 JEV_API_KEY
 cd jev-workflow-module
-python3 -m wfrouter "角色的待機動作還沒做完"
+python3 -m jev_workflow "角色的待機動作還沒做完"
+```
+
+`JEV_API_KEY` / `JEV_BASE_URL` 是所有模組共用的;若只要讓這個模組走別的
+endpoint 或別的金鑰,在根目錄的 `.env` 用 `WORKFLOW_API_KEY`、
+`WORKFLOW_BASE_URL`,有前綴的優先。
+
+決策可以走兩個 backend:`native`(Jev API,預設)或 `openrouter`
+(OpenRouter 上的 `~typesafe/jev-latest`,需要 `OPENROUTER_API_KEY`)。
+常設的選擇寫在專案根目錄的 `jev.json`(`modules.jev_workflow.backend`),
+臨時要換再用 `JEV_BACKEND`(全部)或 `WORKFLOW_BACKEND`(只有這個模組)覆蓋。
+這個模組只問通用的 `{state, questions}` 決策,兩個 backend 都直接支援,
+中間不做任何轉換。
+
+```bash
+JEV_BACKEND=openrouter python3 -m jev_workflow "角色的待機動作還沒做完"
 ```
 
 ```
@@ -63,7 +78,7 @@ workflow:   Audit animation needs  (asset-audit-anim)
 command:    /asset-audit-anim
 stage:      audit
 entry:      skill (unimplemented)
-dir:        .../wfrouter/workflows/asset-audit-anim
+dir:        .../jev_workflow/workflows/asset-audit-anim
 inputs:     game design spec, the model checklist, the project tree
 next:       /anim-generate
 confidence: 0.97
@@ -73,7 +88,7 @@ note:       nothing is implemented behind /asset-audit-anim yet; write system_pr
 當成函式庫，主程式拿 `interface` 去執行：
 
 ```python
-from wfrouter import select_workflow
+from jev_workflow import select_workflow
 
 route = select_workflow("粒子特效要做一輪",
                         context={"asset-audit-vfx": "missing"})
@@ -99,10 +114,10 @@ select_workflow(req, two_step=True)                 # 強制先選階段
 收窄到剩一個選項會直接拒絕（並告訴你該直接呼叫哪個指令），而不是假裝做了決策。
 
 ```bash
-python3 -m wfrouter --list              # 依階段列出全部
-python3 -m wfrouter --list --stage audit
-python3 -m wfrouter --show coding-game  # 單一工作流的接口
-python3 -m wfrouter --two-step "..."    # 或 --one-shot
+python3 -m jev_workflow --list              # 依階段列出全部
+python3 -m jev_workflow --list --stage audit
+python3 -m jev_workflow --show coding-game  # 單一工作流的接口
+python3 -m jev_workflow --two-step "..."    # 或 --one-shot
 ```
 
 ## 兩段式路由
@@ -184,8 +199,8 @@ select_workflow(req, context={"define-art": "missing"}).blocked_by
 ## 驗證
 
 ```bash
-python3 -m wfrouter.verify          # 35 個離線檢查，不打網路
-python3 -m wfrouter.verify --live   # 再加 21 條真實路由
+python3 -m jev_workflow.verify          # 35 個離線檢查，不打網路
+python3 -m jev_workflow.verify --live   # 再加 21 條真實路由
 ```
 
 離線那層必須永遠是綠的。`--live` 會受 Jev 的可用性影響，也是 description

@@ -68,7 +68,7 @@ or code」）。台詞那題重測後回到 `narrative-design` 1.00。
     "id": "asset-audit-anim",
     "command": "/asset-audit-anim",
     "stage": "audit",
-    "dir": ".../wfrouter/workflows/asset-audit-anim",
+    "dir": ".../jev_workflow/workflows/asset-audit-anim",
     "entry": {"kind": "skill", "ref": null,
               "system_prompt_path": ".../asset-audit-anim/system_prompt.md",
               "tools": []},
