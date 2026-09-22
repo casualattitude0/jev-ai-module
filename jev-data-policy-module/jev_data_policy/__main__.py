@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Inspect the data policy.
 
-    python3 -m jevpolicy                        show the policy
-    python3 -m jevpolicy --class internal       who is cleared for a class
-    python3 -m jevpolicy --check jevai.org internal
+    python3 -m jev_data_policy                        show the policy
+    python3 -m jev_data_policy --class internal       who is cleared for a class
+    python3 -m jev_data_policy --check jevai.org internal
 """
 import argparse
 import sys
 
 from .policy import (PolicyError, approved_targets, assert_service,
-                     assert_target, load, rank)
+                     assert_target, load, policy_path, rank)
 
 
 def main():
@@ -50,7 +50,9 @@ def main():
         print(f"targets cleared for {args.data_class!r}: {', '.join(ok) or 'none'}")
         return 0
 
+    path, source = policy_path()
     floor = pol.get("external_class_floor")
+    print(f"policy: {path}\n        (from {source})\n")
     print(f"classes: {' < '.join(pol['classes'])}")
     print(f"external floor: {floor}  "
           f"(at or above this, outbound text must be redacted)\n")

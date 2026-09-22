@@ -19,6 +19,24 @@ import os
 PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+MODULE = "jev_data_policy"
+# The prefix that answers a setting for this module alone. It drops the shared
+# "jev_" so a scoped name never reads like one of the JEV_ names every module
+# shares: MODEL_ROUTER_BACKEND against JEV_BACKEND.
+SCOPE = MODULE.upper().removeprefix("JEV_")
+CONFIG_NAME = "jev.json"
+_CONFIG = None
+
+# Refused in jev.json: that file is checked in, so a key placed there would be
+# committed. Secrets stay in .env, which is not.
+CONFIG_SECRETS = ("key", "token", "secret", "password")
+
+# Structural keys in jev.json, never settings. "modules" holds the per-module
+# table, and one module's setting really is called MODULES (the workflows
+# directory) -- without this, a lookup for it would find the table instead.
+CONFIG_RESERVED = ("modules",)
+
+
 class PolicyError(ValueError):
     """Base for every refusal this module makes."""
 
@@ -31,10 +49,119 @@ class ExternalLeakError(PolicyError):
     """Sending this text to an external service would exceed its clearance."""
 
 
+def dotenv_paths(name=".env"):
+    """Where to look for a project file, nearest caller first.
+
+    Walks up from the working directory, so a module sitting in a subfolder
+    still finds the one at its project's root. A file shipped inside the
+    package is the last resort, so the host project's own configuration always
+    wins over one that travelled with the module.
+    """
+    paths, d = [], os.getcwd()
+    while True:
+        paths.append(os.path.join(d, name))
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    paths.append(os.path.join(PKG_DIR, name))
+    return paths
+
+
+def load_dotenv(name=".env"):
+    """Load KEY=value lines from .env without overriding the real environment."""
+    for path in dotenv_paths(name):
+        try:
+            with open(path) as f:
+                lines = f.readlines()
+        except OSError:
+            continue
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip().strip("\"'"))
+
+
+load_dotenv()
+
+
+def load_config(name=CONFIG_NAME):
+    """The project-root config, found the same way .env is. Cached."""
+    global _CONFIG
+    if _CONFIG is not None:
+        return _CONFIG
+    _CONFIG = {}
+    for path in dotenv_paths(name):
+        try:
+            with open(path) as f:
+                loaded = json.load(f)
+        except OSError:
+            continue
+        except ValueError as e:
+            raise PolicyError(f"{path} is not valid JSON: {e}")
+        if not isinstance(loaded, dict):
+            raise PolicyError(f"{path} must hold an object")
+        _check_no_secrets(loaded, path)
+        _CONFIG = loaded
+        break
+    return _CONFIG
+
+
+def _check_no_secrets(config, path):
+    scopes = [config] + list((config.get("modules") or {}).values())
+    for scope in scopes:
+        if not isinstance(scope, dict):
+            continue
+        for key in scope:
+            # A leading underscore marks a note rather than a setting; the
+            # resolver never reads those, so they are not credentials.
+            if key.startswith("_"):
+                continue
+            # Substring, not an exact name: openrouter_api_key must be caught
+            # as surely as api_key, or the resolver becomes a way to read a
+            # credential out of a committed file.
+            if any(word in key.lower() for word in CONFIG_SECRETS):
+                raise PolicyError(
+                    f"{path} sets {key!r}; that file is checked in, so a "
+                    f"credential there would be committed. Put it in .env")
+
+
+def setting_source(name, default=None):
+    """The value for `name` and where it came from, for showing the user.
+
+    Same resolution as every other module here: DATA_POLICY_<NAME> beats
+    JEV_<NAME>, which beats jev.json's modules.jev_data_policy entry, which beats its
+    top level, which beats the built-in default.
+    """
+    for env_key in (f"{SCOPE}_{name}", f"JEV_{name}"):
+        value = os.environ.get(env_key)
+        if value:
+            return value, f"${env_key}"
+    config = load_config()
+    key = name.lower()
+    scoped = (config.get("modules") or {}).get(MODULE) or {}
+    if isinstance(scoped, dict) and scoped.get(key):
+        return scoped[key], f"{CONFIG_NAME} modules.{MODULE}.{key}"
+    if key not in CONFIG_RESERVED and config.get(key):
+        return config[key], f"{CONFIG_NAME} {key}"
+    return default, "the policy shipped with this module"
+
+
+def setting(name, default=None):
+    """Read one setting: env first, then the root config, then the default."""
+    return setting_source(name, default)[0]
+
+
+def policy_path():
+    """Which policy file is in force, and where that choice came from."""
+    return setting_source("DATA_POLICY", os.path.join(PKG_DIR, "policy.json"))
+
+
 def load(path=None):
     """Return the validated policy."""
-    path = path or os.environ.get("JEV_DATA_POLICY",
-                                  os.path.join(PKG_DIR, "policy.json"))
+    path = path or policy_path()[0]
     with open(path) as f:
         pol = json.load(f)
 
