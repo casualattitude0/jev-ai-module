@@ -1,0 +1,32 @@
+{
+  "id": "asset-audit-music",
+  "command": "/asset-audit-music",
+  "stage": "audit",
+  "display_name": "Audit music needs",
+  "description": "Reads the project to find every music cue it needs and produces a checklist: what exists, what is missing, what is placeholder. Produces a list, never the audio.",
+  "when_to_use": [
+    "the request is 'what music do we still need'",
+    "a music generation run needs a list to work from"
+  ],
+  "avoid_when": [
+    "the list already exists and the request is to produce the tracks",
+    "the audio in question is sound effects rather than music"
+  ],
+  "inputs": [
+    "the project tree",
+    "the music bible when there is one"
+  ],
+  "outputs": [
+    "music cue checklist with gaps marked"
+  ],
+  "depends_on": [
+    "define-music"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

@@ -1,0 +1,34 @@
+{
+  "id": "perf-profile",
+  "command": "/perf-profile",
+  "stage": "verify",
+  "display_name": "Profile performance",
+  "description": "Measures frame time, memory, load time and draw calls against a budget and names the specific cost. Diagnoses only; the fix is a code or asset change afterwards.",
+  "when_to_use": [
+    "the game stutters, hitches, or loads slowly",
+    "memory or frame budget is being exceeded",
+    "a performance claim needs measuring rather than guessing"
+  ],
+  "avoid_when": [
+    "the cause is already measured and the request is to fix it",
+    "the complaint is about feel rather than measurable cost"
+  ],
+  "inputs": [
+    "a runnable build",
+    "the target budget and device"
+  ],
+  "outputs": [
+    "profile with the costs named"
+  ],
+  "depends_on": [
+    "coding-game",
+    "apply-assets"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

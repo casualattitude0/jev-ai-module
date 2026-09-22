@@ -1,0 +1,35 @@
+{
+  "id": "tech-design",
+  "command": "/tech-design",
+  "stage": "architect",
+  "display_name": "Technical design",
+  "description": "System architecture before the code exists: module boundaries, data schema, save format, network model, which engine features to lean on. Produces a technical design with its trade-offs, not an implementation.",
+  "when_to_use": [
+    "a feature spans several systems and its shape is not settled",
+    "a data schema, save format or protocol has to be decided",
+    "there is a real choice between technical approaches"
+  ],
+  "avoid_when": [
+    "the change fits inside one existing system",
+    "the architecture is settled and the work is writing the code"
+  ],
+  "inputs": [
+    "game design spec",
+    "the existing codebase"
+  ],
+  "outputs": [
+    "technical design",
+    "the trade-offs behind it"
+  ],
+  "depends_on": [
+    "game-design",
+    "data-design"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

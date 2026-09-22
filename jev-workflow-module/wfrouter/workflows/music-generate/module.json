@@ -1,0 +1,34 @@
+{
+  "id": "music-generate",
+  "command": "/music-generate",
+  "stage": "generate",
+  "display_name": "Generate music",
+  "description": "Produces the music cues on an audited checklist, following the music bible, including the adaptive layers and loop points each cue calls for. Writes to staging; does not wire anything up.",
+  "when_to_use": [
+    "a music checklist exists and the tracks have to be made",
+    "the request is to compose or generate music"
+  ],
+  "avoid_when": [
+    "there is no checklist yet",
+    "the files exist and only need importing",
+    "the audio wanted is sound effects"
+  ],
+  "inputs": [
+    "music cue checklist",
+    "music bible"
+  ],
+  "outputs": [
+    "music files in the staging area"
+  ],
+  "depends_on": [
+    "asset-audit-music",
+    "define-music"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

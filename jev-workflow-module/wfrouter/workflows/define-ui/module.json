@@ -1,0 +1,34 @@
+{
+  "id": "define-ui",
+  "command": "/define-ui",
+  "stage": "define",
+  "display_name": "Define UI style",
+  "description": "The UI style guide: type scale, spacing system, component states, iconography rules, interface motion. Sits between the art bible and the screen flow, and is what every UI asset is checked against.",
+  "when_to_use": [
+    "interface elements look inconsistent across screens",
+    "a component library or design system has to be written down",
+    "type, spacing or icon rules are undecided"
+  ],
+  "avoid_when": [
+    "the screen structure itself is still unsettled",
+    "the request is to produce specific UI images"
+  ],
+  "inputs": [
+    "screen flow",
+    "art bible"
+  ],
+  "outputs": [
+    "ui style guide"
+  ],
+  "depends_on": [
+    "ux-design",
+    "define-art"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

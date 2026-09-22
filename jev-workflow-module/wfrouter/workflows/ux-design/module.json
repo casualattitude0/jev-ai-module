@@ -1,0 +1,34 @@
+{
+  "id": "ux-design",
+  "command": "/ux-design",
+  "stage": "design",
+  "display_name": "UX design",
+  "description": "Screen flow and information architecture: which screens exist, what leads where, what the HUD shows at each moment, input and control mapping. Decides structure and behaviour; the visual style of it belongs to the UI style guide.",
+  "when_to_use": [
+    "a menu, flow, HUD or screen structure has to be decided",
+    "players get lost or cannot find something",
+    "input and control mapping is being worked out"
+  ],
+  "avoid_when": [
+    "the flow is settled and only the look is in question",
+    "the work is implementing an already-specified screen"
+  ],
+  "inputs": [
+    "game design spec",
+    "platform and input devices"
+  ],
+  "outputs": [
+    "screen flow",
+    "HUD and input spec"
+  ],
+  "depends_on": [
+    "game-design"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

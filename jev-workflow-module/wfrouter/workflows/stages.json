@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "_note": "Stages run roughly in this order, and depends_on may never point at a later one. The router picks a workflow, not a stage: a request may legitimately jump backwards.",
+  "stages": {
+    "discuss": {
+      "order": 1,
+      "description": "Talking it through. Nothing is written to the project yet."
+    },
+    "design": {
+      "order": 2,
+      "description": "Deciding what the game is and writing it down: loops, levels, story and its actual dialogue lines, screens, numbers. Produces documents and text, never binary asset files."
+    },
+    "define": {
+      "order": 3,
+      "description": "Writing down a style bible so later stages have one source of truth."
+    },
+    "architect": {
+      "order": 4,
+      "description": "Deciding how the code is shaped -- boundaries, schemas, formats -- before any of it is written."
+    },
+    "build": {
+      "order": 5,
+      "description": "Writing and changing code."
+    },
+    "audit": {
+      "order": 6,
+      "description": "Walking the project to find out which assets are actually needed."
+    },
+    "generate": {
+      "order": 7,
+      "description": "Producing binary asset files -- images, audio, models, clips -- from an audited checklist. Never written text, design documents or code."
+    },
+    "integrate": {
+      "order": 8,
+      "description": "Putting produced assets into the game project."
+    },
+    "verify": {
+      "order": 9,
+      "description": "Finding out whether what was built actually works and feels right, on a build that already exists. Reports findings; changes nothing."
+    },
+    "ship": {
+      "order": 10,
+      "description": "Getting a build out to players."
+    }
+  }
+}

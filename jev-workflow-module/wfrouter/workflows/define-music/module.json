@@ -1,0 +1,28 @@
+{
+  "id": "define-music",
+  "command": "/define-music",
+  "stage": "define",
+  "display_name": "Define music style",
+  "description": "Defines the musical style and writes the music bible: instrumentation, mode and tempo, adaptive-layer structure, references. Cited by the music audit and generation runs.",
+  "when_to_use": [
+    "the musical direction is undecided",
+    "a music bible is missing or out of date"
+  ],
+  "avoid_when": [
+    "the style is already written down and the request is to produce tracks"
+  ],
+  "inputs": [
+    "genre, mood, references, where music plays"
+  ],
+  "outputs": [
+    "music bible document"
+  ],
+  "depends_on": [],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

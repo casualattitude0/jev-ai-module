@@ -1,0 +1,34 @@
+{
+  "id": "anim-generate",
+  "command": "/anim-generate",
+  "stage": "generate",
+  "display_name": "Generate animation",
+  "description": "Produces animation from an audited checklist: rigs, skinning, clips and transitions for the models that need them. Writes to the staging area; the state machine that plays them is code.",
+  "when_to_use": [
+    "an animation checklist exists and the clips have to be made",
+    "a character needs rigging or skinning"
+  ],
+  "avoid_when": [
+    "there is no checklist yet",
+    "the models to animate do not exist",
+    "the work is the code that drives the animation"
+  ],
+  "inputs": [
+    "animation checklist",
+    "the models"
+  ],
+  "outputs": [
+    "rigs and clips in the staging area"
+  ],
+  "depends_on": [
+    "asset-audit-anim",
+    "model-generate"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

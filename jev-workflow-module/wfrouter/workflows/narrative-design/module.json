@@ -1,0 +1,34 @@
+{
+  "id": "narrative-design",
+  "command": "/narrative-design",
+  "stage": "design",
+  "display_name": "Narrative design",
+  "description": "Story, world and characters, down to the written dialogue, barks and item text. Produces the script and the lore bible; the voice rules live here too.",
+  "when_to_use": [
+    "the request is about story, world, characters or written lines",
+    "dialogue or flavour text has to be written",
+    "the tone of the writing is inconsistent"
+  ],
+  "avoid_when": [
+    "the request is about how the text is displayed rather than what it says",
+    "the work is translating existing text"
+  ],
+  "inputs": [
+    "game design spec",
+    "tone and setting"
+  ],
+  "outputs": [
+    "script and dialogue",
+    "lore bible"
+  ],
+  "depends_on": [
+    "game-design"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

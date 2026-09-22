@@ -1,0 +1,34 @@
+{
+  "id": "asset-audit-ui",
+  "command": "/asset-audit-ui",
+  "stage": "audit",
+  "display_name": "Audit UI asset needs",
+  "description": "Walks every screen in the flow and lists the interface assets they need: icons, frames, nine-slices, fonts, cursors, per-state variants. Produces a list, never the images.",
+  "when_to_use": [
+    "the request is 'what UI assets are still missing'",
+    "screens are shipping with placeholder interface art",
+    "a UI generation run needs a list to work from"
+  ],
+  "avoid_when": [
+    "the list already exists and the request is to produce the images",
+    "the question is what the screens should do rather than what art they need"
+  ],
+  "inputs": [
+    "screen flow",
+    "the ui style guide when there is one"
+  ],
+  "outputs": [
+    "UI asset checklist with gaps marked"
+  ],
+  "depends_on": [
+    "define-ui",
+    "ux-design"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

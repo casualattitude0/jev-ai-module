@@ -1,0 +1,33 @@
+{
+  "id": "data-design",
+  "command": "/data-design",
+  "stage": "design",
+  "display_name": "Data design",
+  "description": "Numeric design: balance, economy, progression curves, drop rates, damage formulas, tuning tables. Produces the numbers and the reasoning behind them, not the code that reads them.",
+  "when_to_use": [
+    "the request is about balance, tuning, curves, rates or costs",
+    "a spreadsheet or a config table is the deliverable"
+  ],
+  "avoid_when": [
+    "the numbers exist and only need wiring into code",
+    "the mechanic being tuned has not been specified yet"
+  ],
+  "inputs": [
+    "the system being tuned",
+    "target player experience"
+  ],
+  "outputs": [
+    "tuning tables",
+    "the model behind the numbers"
+  ],
+  "depends_on": [
+    "game-design"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

@@ -1,0 +1,33 @@
+{
+  "id": "asset-audit-vfx",
+  "command": "/asset-audit-vfx",
+  "stage": "audit",
+  "display_name": "Audit visual-effect needs",
+  "description": "Finds every visual effect the game calls for -- impacts, trails, auras, environment effects -- and lists what exists against what is missing. Produces a list, never the effects.",
+  "when_to_use": [
+    "the request is 'what effects do we still need'",
+    "abilities or impacts have no effect attached",
+    "a vfx generation run needs a list to work from"
+  ],
+  "avoid_when": [
+    "the list already exists and the request is to produce the effects",
+    "the effect needs engine-side scripting rather than an asset"
+  ],
+  "inputs": [
+    "the project tree",
+    "the art bible when there is one"
+  ],
+  "outputs": [
+    "vfx checklist with gaps marked"
+  ],
+  "depends_on": [
+    "define-art"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

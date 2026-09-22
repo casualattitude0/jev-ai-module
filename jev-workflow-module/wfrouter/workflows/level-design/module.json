@@ -1,0 +1,34 @@
+{
+  "id": "level-design",
+  "command": "/level-design",
+  "stage": "design",
+  "display_name": "Level design",
+  "description": "Designs levels and encounters: spatial layout, pacing, difficulty curve across a level, enemy and reward placement, teaching order. Produces level plans and beat sheets, not the built level.",
+  "when_to_use": [
+    "a level, stage, map or encounter has to be laid out",
+    "the moment-to-moment pacing of a level is wrong",
+    "new mechanics need a place that teaches them"
+  ],
+  "avoid_when": [
+    "the mechanics themselves are undefined",
+    "the request is to tune global numbers rather than one level's shape"
+  ],
+  "inputs": [
+    "game design spec",
+    "the mechanics available"
+  ],
+  "outputs": [
+    "level plans",
+    "encounter and pacing beat sheets"
+  ],
+  "depends_on": [
+    "game-design"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

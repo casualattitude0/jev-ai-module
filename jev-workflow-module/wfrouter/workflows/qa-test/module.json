@@ -1,0 +1,35 @@
+{
+  "id": "qa-test",
+  "command": "/qa-test",
+  "stage": "verify",
+  "display_name": "QA and automated tests",
+  "description": "Verification by machine rather than by feel: writes and runs automated tests, reproduces bugs, reports what fails and how to trigger it. Covers regression before a release.",
+  "when_to_use": [
+    "behaviour has to be proven correct, not just tried",
+    "a bug needs reproducing or a regression test",
+    "a release needs its test pass"
+  ],
+  "avoid_when": [
+    "the question is whether something is fun rather than correct",
+    "the request is to implement the fix"
+  ],
+  "inputs": [
+    "a runnable build",
+    "the behaviour that should hold"
+  ],
+  "outputs": [
+    "tests",
+    "a pass or fail report with repro steps"
+  ],
+  "depends_on": [
+    "coding-game",
+    "coding-tools"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

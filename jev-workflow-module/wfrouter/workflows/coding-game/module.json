@@ -1,0 +1,35 @@
+{
+  "id": "coding-game",
+  "command": "/coding-game",
+  "stage": "build",
+  "display_name": "Code the game",
+  "description": "Game programming. Feature work, gameplay systems, bug fixes, and the engine-side integration of art, music and sound effects. This is the workflow that writes code players run.",
+  "when_to_use": [
+    "something in the game has to behave differently",
+    "a feature, system or fix is being implemented",
+    "engine-side wiring is needed for an asset or a system"
+  ],
+  "avoid_when": [
+    "the request is about what to build rather than building it",
+    "the work is purely producing asset files",
+    "the code is for the team's tooling rather than the game"
+  ],
+  "inputs": [
+    "a settled requirement",
+    "the project source tree"
+  ],
+  "outputs": [
+    "code changes",
+    "tests"
+  ],
+  "depends_on": [
+    "tech-design"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

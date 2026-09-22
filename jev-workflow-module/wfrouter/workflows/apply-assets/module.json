@@ -1,0 +1,39 @@
+{
+  "id": "apply-assets",
+  "command": "/apply-assets",
+  "stage": "integrate",
+  "display_name": "Apply assets",
+  "description": "Takes produced assets out of the staging area and into the game project: import settings, naming, atlases, references, replacing placeholders. Moves and wires existing files; produces none.",
+  "when_to_use": [
+    "assets exist and are not in the game yet",
+    "placeholders have to be swapped for the real thing",
+    "the request is about importing, wiring or hooking up assets"
+  ],
+  "avoid_when": [
+    "the assets do not exist yet",
+    "the work is gameplay code rather than asset plumbing"
+  ],
+  "inputs": [
+    "produced assets in the staging area",
+    "the project tree"
+  ],
+  "outputs": [
+    "assets imported and referenced in the project"
+  ],
+  "depends_on": [
+    "art-generate",
+    "ui-generate",
+    "vfx-generate",
+    "model-generate",
+    "anim-generate",
+    "sfx-generate",
+    "music-generate"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

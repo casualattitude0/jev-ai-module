@@ -1,0 +1,35 @@
+{
+  "id": "build-release",
+  "command": "/build-release",
+  "stage": "ship",
+  "display_name": "Build a release",
+  "description": "Builds, versions, signs and packages the game for its target platforms, and assembles what the store or distribution channel needs. The last step, and the one that must be repeatable.",
+  "when_to_use": [
+    "a build has to go out to players or testers",
+    "the request is about versioning, packaging, signing or store submission",
+    "a release candidate has to be cut"
+  ],
+  "avoid_when": [
+    "the build is failing to compile, which is a code problem",
+    "the release has not passed its test pass yet"
+  ],
+  "inputs": [
+    "a passing build",
+    "version and platform targets"
+  ],
+  "outputs": [
+    "packaged builds",
+    "release notes and store artefacts"
+  ],
+  "depends_on": [
+    "qa-test",
+    "apply-assets"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

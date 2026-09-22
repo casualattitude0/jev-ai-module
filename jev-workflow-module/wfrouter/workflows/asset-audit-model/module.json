@@ -1,0 +1,34 @@
+{
+  "id": "asset-audit-model",
+  "command": "/asset-audit-model",
+  "stage": "audit",
+  "display_name": "Audit 3D model needs",
+  "description": "Lists every 3D asset the project needs -- characters, props, environment pieces -- with what exists, what is placeholder, and the poly and texture budget each one has to fit.",
+  "when_to_use": [
+    "the request is 'what models do we still need'",
+    "levels are standing on placeholder geometry",
+    "a model generation run needs a list to work from"
+  ],
+  "avoid_when": [
+    "the list already exists and the request is to produce the models",
+    "the project is 2D"
+  ],
+  "inputs": [
+    "level plans",
+    "the project tree",
+    "the art bible when there is one"
+  ],
+  "outputs": [
+    "model checklist with budgets and gaps marked"
+  ],
+  "depends_on": [
+    "define-art"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

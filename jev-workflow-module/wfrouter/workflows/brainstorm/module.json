@@ -1,0 +1,32 @@
+{
+  "id": "brainstorm",
+  "command": "/brainstorm",
+  "stage": "discuss",
+  "display_name": "Brainstorm",
+  "description": "Open discussion about gameplay. Explores ideas, compares directions and argues about what the game should be. Produces notes and decisions, never code, assets or numbers.",
+  "when_to_use": [
+    "the request is a question, an idea, or a 'what if'",
+    "the direction is not settled yet",
+    "the user wants to think out loud rather than get a file changed"
+  ],
+  "avoid_when": [
+    "the decision is already made and the work is now execution",
+    "the request names a concrete artefact to produce"
+  ],
+  "inputs": [
+    "topic or question",
+    "any prior decisions worth respecting"
+  ],
+  "outputs": [
+    "discussion notes",
+    "a recommended direction"
+  ],
+  "depends_on": [],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

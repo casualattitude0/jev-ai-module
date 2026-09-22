@@ -1,0 +1,33 @@
+{
+  "id": "asset-audit-art",
+  "command": "/asset-audit-art",
+  "stage": "audit",
+  "display_name": "Audit art needs",
+  "description": "Reads the project to find every 2D art asset it needs and produces a checklist: what exists, what is missing, what is placeholder. Produces a list, never the images themselves.",
+  "when_to_use": [
+    "the request is 'what art do we still need'",
+    "a generation run needs a list to work from",
+    "art coverage across the project is unknown"
+  ],
+  "avoid_when": [
+    "the list already exists and the request is to produce the images",
+    "the assets in question are interface, effect, model or animation assets"
+  ],
+  "inputs": [
+    "the project tree",
+    "the art bible when there is one"
+  ],
+  "outputs": [
+    "art asset checklist with gaps marked"
+  ],
+  "depends_on": [
+    "define-art"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

@@ -1,0 +1,34 @@
+{
+  "id": "art-generate",
+  "command": "/art-generate",
+  "stage": "generate",
+  "display_name": "Generate art",
+  "description": "Produces the image files for every entry on an audited art checklist, following the art bible. Writes files to the asset staging area; does not wire them into the game.",
+  "when_to_use": [
+    "an art checklist exists and the images have to be made",
+    "the request is to draw, render or generate 2D images"
+  ],
+  "avoid_when": [
+    "there is no checklist yet",
+    "the files exist and only need importing",
+    "the assets wanted are interface, effect, model or animation assets"
+  ],
+  "inputs": [
+    "art asset checklist",
+    "art bible"
+  ],
+  "outputs": [
+    "image files in the staging area"
+  ],
+  "depends_on": [
+    "asset-audit-art",
+    "define-art"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

@@ -1,0 +1,32 @@
+{
+  "id": "asset-audit-sfx",
+  "command": "/asset-audit-sfx",
+  "stage": "audit",
+  "display_name": "Audit sound-effect needs",
+  "description": "Reads the project to find every sound effect it needs and produces a checklist: what exists, what is missing, what is placeholder. Produces a list, never the audio.",
+  "when_to_use": [
+    "the request is 'what sound effects do we still need'",
+    "an SFX generation run needs a list to work from"
+  ],
+  "avoid_when": [
+    "the list already exists and the request is to produce the sounds",
+    "the audio in question is music rather than effects"
+  ],
+  "inputs": [
+    "the project tree",
+    "the sfx bible when there is one"
+  ],
+  "outputs": [
+    "sfx checklist with gaps marked"
+  ],
+  "depends_on": [
+    "define-sound"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

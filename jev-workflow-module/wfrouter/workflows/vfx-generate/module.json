@@ -1,0 +1,33 @@
+{
+  "id": "vfx-generate",
+  "command": "/vfx-generate",
+  "stage": "generate",
+  "display_name": "Generate visual effects",
+  "description": "Produces visual-effect assets: particle sheets, trails, impact flashes, shader-driven effects. Follows the art bible. Writes files to the asset staging area; does not wire them into the game.",
+  "when_to_use": [
+    "the request is to produce effects rather than static art",
+    "an effect on the checklist has to be made"
+  ],
+  "avoid_when": [
+    "the effect needs engine-side scripting rather than an asset",
+    "the files exist and only need importing"
+  ],
+  "inputs": [
+    "vfx checklist",
+    "art bible"
+  ],
+  "outputs": [
+    "vfx assets in the staging area"
+  ],
+  "depends_on": [
+    "asset-audit-vfx",
+    "define-art"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

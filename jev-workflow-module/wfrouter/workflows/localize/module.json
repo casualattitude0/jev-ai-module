@@ -1,0 +1,35 @@
+{
+  "id": "localize",
+  "command": "/localize",
+  "stage": "ship",
+  "display_name": "Localize",
+  "description": "Extracts every player-facing string, gets it translated, and puts it back with layout overflow, font coverage and plural rules checked. Handles the text pipeline, not the writing of it.",
+  "when_to_use": [
+    "the game has to run in another language",
+    "strings are hardcoded and need extracting",
+    "translated text is overflowing or missing glyphs"
+  ],
+  "avoid_when": [
+    "the request is to write the original text",
+    "the work is a locale-specific gameplay change"
+  ],
+  "inputs": [
+    "the script and UI text",
+    "target locales"
+  ],
+  "outputs": [
+    "string tables per locale",
+    "an overflow and glyph report"
+  ],
+  "depends_on": [
+    "narrative-design",
+    "ux-design"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

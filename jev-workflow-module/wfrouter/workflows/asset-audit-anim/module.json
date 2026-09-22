@@ -1,0 +1,35 @@
+{
+  "id": "asset-audit-anim",
+  "command": "/asset-audit-anim",
+  "stage": "audit",
+  "display_name": "Audit animation needs",
+  "description": "Lists every animation the game needs: state machines, clips per character, transitions, cutscene beats. Names which clips exist and which are missing. Produces a list, never the animation.",
+  "when_to_use": [
+    "the request is 'what animations are still missing'",
+    "a character or state machine has gaps",
+    "an animation generation run needs a list to work from"
+  ],
+  "avoid_when": [
+    "the list already exists and the request is to produce the clips",
+    "the problem is animation code rather than missing clips"
+  ],
+  "inputs": [
+    "game design spec",
+    "the model checklist",
+    "the project tree"
+  ],
+  "outputs": [
+    "animation checklist with gaps marked"
+  ],
+  "depends_on": [
+    "define-art",
+    "game-design"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

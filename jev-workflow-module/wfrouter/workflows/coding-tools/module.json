@@ -1,0 +1,33 @@
+{
+  "id": "coding-tools",
+  "command": "/coding-tools",
+  "stage": "build",
+  "display_name": "Code the tooling",
+  "description": "Editor and pipeline tooling: importers, inspectors, asset validators, build scripts, debug overlays. Code the team runs, never code that ships inside the game.",
+  "when_to_use": [
+    "a manual step keeps being repeated by hand",
+    "the asset pipeline needs a validator, importer or exporter",
+    "designers need an editor tool to do their own work"
+  ],
+  "avoid_when": [
+    "the change alters what players experience",
+    "the request is a gameplay feature or fix"
+  ],
+  "inputs": [
+    "the repeated task",
+    "the project source tree"
+  ],
+  "outputs": [
+    "tooling and scripts"
+  ],
+  "depends_on": [
+    "tech-design"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

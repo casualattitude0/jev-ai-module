@@ -1,0 +1,33 @@
+{
+  "id": "game-design",
+  "command": "/game-design",
+  "stage": "design",
+  "display_name": "Game design spec",
+  "description": "Writes the design spec for a game or a feature: core loop, player verbs, mechanics, win and lose conditions, progression structure. Turns a settled direction into something precise enough to build from. Prose and diagrams, not numbers and not code.",
+  "when_to_use": [
+    "a direction is agreed and has to be written down as a spec",
+    "people disagree about how a mechanic actually works",
+    "a feature needs defining before anyone writes code"
+  ],
+  "avoid_when": [
+    "the direction is still being argued rather than recorded",
+    "the request is about tuning numbers in a mechanic that is already specified"
+  ],
+  "inputs": [
+    "agreed direction",
+    "constraints: platform, session length, audience"
+  ],
+  "outputs": [
+    "game design spec"
+  ],
+  "depends_on": [
+    "brainstorm"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

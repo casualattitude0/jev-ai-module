@@ -1,0 +1,28 @@
+{
+  "id": "define-sound",
+  "command": "/define-sound",
+  "stage": "define",
+  "display_name": "Define sound style",
+  "description": "Defines the sound-effect style and writes the SFX bible: material palette, weight and punch, frequency budget, spatial rules, references. Cited by the SFX audit and generation runs.",
+  "when_to_use": [
+    "the sound-effect character is undecided",
+    "an SFX bible is missing or out of date"
+  ],
+  "avoid_when": [
+    "the style is already written down and the request is to produce sounds"
+  ],
+  "inputs": [
+    "genre, setting, platform, references"
+  ],
+  "outputs": [
+    "sfx bible document"
+  ],
+  "depends_on": [],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

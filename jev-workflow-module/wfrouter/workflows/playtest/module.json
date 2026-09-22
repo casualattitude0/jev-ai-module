@@ -1,0 +1,33 @@
+{
+  "id": "playtest",
+  "command": "/playtest",
+  "stage": "verify",
+  "display_name": "Playtest",
+  "description": "Plays the build and reports what actually happens: where it drags, what confuses, what breaks the feel, what is more fun than expected. Produces findings and priorities, never fixes.",
+  "when_to_use": [
+    "the request is whether something is fun, clear or feels right",
+    "a build needs playing through before it goes anywhere",
+    "a change landed and nobody has tried it yet"
+  ],
+  "avoid_when": [
+    "the question is whether the code is correct rather than whether it feels right",
+    "the request is to fix what a previous playtest found"
+  ],
+  "inputs": [
+    "a runnable build",
+    "what to pay attention to"
+  ],
+  "outputs": [
+    "playtest findings, prioritised"
+  ],
+  "depends_on": [
+    "coding-game"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

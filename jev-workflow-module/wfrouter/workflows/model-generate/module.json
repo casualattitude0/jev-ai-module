@@ -1,0 +1,35 @@
+{
+  "id": "model-generate",
+  "command": "/model-generate",
+  "stage": "generate",
+  "display_name": "Generate 3D models",
+  "description": "Produces 3D assets from an audited model checklist: meshes, UVs, materials and LODs, inside the stated poly and texture budgets. Writes to the staging area; does not import anything.",
+  "when_to_use": [
+    "a model checklist exists and the geometry has to be made",
+    "the request is to model, sculpt or retopologise something"
+  ],
+  "avoid_when": [
+    "there is no checklist yet",
+    "the files exist and only need importing",
+    "the asset wanted is 2D"
+  ],
+  "inputs": [
+    "model checklist",
+    "art bible",
+    "poly and texture budgets"
+  ],
+  "outputs": [
+    "model files in the staging area"
+  ],
+  "depends_on": [
+    "asset-audit-model",
+    "define-art"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

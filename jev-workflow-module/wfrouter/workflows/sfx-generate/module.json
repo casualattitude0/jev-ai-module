@@ -1,0 +1,34 @@
+{
+  "id": "sfx-generate",
+  "command": "/sfx-generate",
+  "stage": "generate",
+  "display_name": "Generate sound effects",
+  "description": "Produces the audio files for every entry on an audited SFX checklist, following the sfx bible. Writes files to the asset staging area; does not wire them into the game.",
+  "when_to_use": [
+    "an sfx checklist exists and the sounds have to be made",
+    "the request is to produce or synthesise sound effects"
+  ],
+  "avoid_when": [
+    "there is no checklist yet",
+    "the files exist and only need importing",
+    "the audio wanted is music"
+  ],
+  "inputs": [
+    "sfx checklist",
+    "sfx bible"
+  ],
+  "outputs": [
+    "audio files in the staging area"
+  ],
+  "depends_on": [
+    "asset-audit-sfx",
+    "define-sound"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

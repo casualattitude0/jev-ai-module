@@ -1,0 +1,31 @@
+{
+  "id": "define-art",
+  "command": "/define-art",
+  "stage": "define",
+  "display_name": "Define art style",
+  "description": "Defines the visual style and writes the art bible: palette, shape language, rendering treatment, references, do and do-not rules. Written once and then cited by every art audit and generation run.",
+  "when_to_use": [
+    "the visual style is undecided or inconsistent",
+    "the request asks what the game should look like",
+    "an art bible is missing or out of date"
+  ],
+  "avoid_when": [
+    "the style is already written down and the request is to produce assets"
+  ],
+  "inputs": [
+    "genre, mood, platform, references"
+  ],
+  "outputs": [
+    "art bible document"
+  ],
+  "depends_on": [
+    "game-design"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}

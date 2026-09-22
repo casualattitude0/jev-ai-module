@@ -1,0 +1,34 @@
+{
+  "id": "ui-generate",
+  "command": "/ui-generate",
+  "stage": "generate",
+  "display_name": "Generate UI assets",
+  "description": "Produces interface images from an audited UI checklist, to the ui style guide: icons, frames, nine-slices, button and cursor states, at every scale the platforms need. Writes to staging; does not wire anything up.",
+  "when_to_use": [
+    "a UI checklist exists and the interface art has to be made",
+    "icons, frames or button states have to be produced"
+  ],
+  "avoid_when": [
+    "there is no checklist yet",
+    "the files exist and only need importing",
+    "the request is to change how a screen behaves"
+  ],
+  "inputs": [
+    "UI asset checklist",
+    "ui style guide"
+  ],
+  "outputs": [
+    "UI images in the staging area"
+  ],
+  "depends_on": [
+    "asset-audit-ui",
+    "define-ui"
+  ],
+  "entry": {
+    "kind": "skill",
+    "ref": null,
+    "system_prompt": "system_prompt.md",
+    "tools": []
+  },
+  "enabled": true
+}
