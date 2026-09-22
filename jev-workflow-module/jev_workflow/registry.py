@@ -152,6 +152,12 @@ def describe(m):
     return " ".join(bits)
 
 
+def gist(m):
+    """The first sentence of a description, for listing a stage's contents."""
+    head = m["description"].split(". ")[0].rstrip(".")
+    return head + "."
+
+
 def in_stage(reg, stage):
     return [m for m in enabled(reg) if m["stage"] == stage]
 
@@ -201,8 +207,8 @@ def stage_candidates(reg):
         out.append({
             "id": name,
             "description": (info["description"] + " Workflows here: "
-                            + "; ".join(f"{m['display_name']} ({m['command']})"
-                                        for m in mods) + "."),
+                            + " ".join(f"{m['display_name']} ({m['command']}) -- "
+                                       f"{gist(m)}" for m in mods)),
         })
     if len(out) < 2:
         raise RegistryError("need at least two populated stages to route by stage")

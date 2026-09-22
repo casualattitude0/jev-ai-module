@@ -439,7 +439,10 @@ def offline(reg):
             for m in mods:
                 expect(m["command"] in c["description"],
                        f"stage {c['id']} does not name {m['command']}")
-        return f"{len(cands)} stages, each naming what is inside it"
+                expect(R.gist(m) in c["description"],
+                       f"stage {c['id']} names {m['command']} without saying "
+                       "what it does")
+        return f"{len(cands)} stages, each saying what is inside it"
     check("stage options carry their contents", stage_options)
 
     def asset_matrix():
