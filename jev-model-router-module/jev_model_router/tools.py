@@ -115,8 +115,11 @@ ROUTE_AND_SERVE_SCHEMA = {
             "kind": {"type": "string",
                      "enum": ["code", "browser", "research", "writing", "general"]},
             "transport": {
-                "type": "string", "enum": ["cli", "api"],
-                "description": "How to reach the model. Defaults to cli.",
+                "type": "string", "enum": ["cli"],
+                "description": (
+                    "How to reach the model. Only the local agent CLI is "
+                    "available; no API key reaches a model from here."
+                ),
             },
         },
         "required": ["input"],
