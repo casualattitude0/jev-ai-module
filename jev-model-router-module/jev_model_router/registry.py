@@ -112,7 +112,16 @@ def variants(reg, *, allow=None, min_context_tokens=None, efforts=None):
                 "model": m,
                 "effort": effort,
                 "id": vid,
-                "cost": _shift(m["base_cost"], step),
+                # Effort can only make a variant dearer, never cheaper.
+                # Thinking less spends fewer tokens, but it does not move the
+                # model onto a cheaper meter, and a downward shift collapsed
+                # every low-effort variant into one bucket: Sonnet at $2/$10
+                # read exactly as cheap as Luna at $0.20/$1.20. That bucket is
+                # the axis Jev is asked to break ties on, so flattening it
+                # there left the tie-break with nothing to weigh.
+                # Latency does fall with less deliberation, so it still moves
+                # both ways.
+                "cost": _shift(m["base_cost"], max(0, step)),
                 "latency": _shift(m["base_latency"], step),
             })
     return out
@@ -169,17 +178,33 @@ def candidates(reg, *, allow=None, min_context_tokens=None, efforts=None):
 TIER_ORDER = {"fast": 0, "balanced": 1, "deep": 2}
 
 
-def floor_for(reg, kind, difficulty, input_tokens=None):
-    """The capability floor for a (kind, difficulty) pair.
+def level_for(difficulty):
+    """The 0-3 band a difficulty score falls in, as a string key.
 
-    difficulty is the 0-3 score from the Jev assessment, rounded to the nearest
-    level: 2.73 asks for the level-3 floor, 2.1 stays at level 2. Rounding up
-    would give anything above 2.0 the frontier floor.
+    Rounded to the nearest level: 2.73 asks for level 3, 2.1 stays at level 2.
+    Rounding up would give anything above 2.0 the frontier floor.
     """
+    return str(min(3, max(0, math.floor(difficulty + 0.5))))
+
+
+def priorities_for(reg, difficulty):
+    """What to tell Jev to optimise for, given how hard the task is.
+
+    This is not cost competing with difficulty: the floor has already run, so
+    every candidate Jev sees can do the work. It is which tie-break to apply
+    among them. Where the floor admits the whole registry -- its way of saying
+    the task is routine -- a quality-first ordering has nothing to weigh and
+    simply buys the dearest model, so cost leads there instead.
+    """
+    table = reg.get("priorities_by_level") or {}
+    return table.get(level_for(difficulty)) or reg.get("default_priorities")
+
+
+def floor_for(reg, kind, difficulty, input_tokens=None):
+    """The capability floor for a (kind, difficulty) pair."""
     table = reg.get("thresholds") or {}
     by_kind = table.get(kind) or table.get("general") or {}
-    level = str(min(3, max(0, math.floor(difficulty + 0.5))))
-    rule = dict(by_kind.get(level) or {})
+    rule = dict(by_kind.get(level_for(difficulty)) or {})
 
     long_ctx = table.get("_long_context") or {}
     if input_tokens and input_tokens > (long_ctx.get("over_tokens") or float("inf")):
@@ -235,8 +260,15 @@ def qualified(reg, kind, difficulty, *, input_tokens=None, allow=None,
     """
     rule = floor_for(reg, kind, difficulty, input_tokens)
     keep, cut = [], {}
-    for v in variants(reg, allow=allow, min_context_tokens=min_context_tokens,
-                      efforts=efforts):
+    for v in variants(reg, allow=allow, efforts=efforts):
+        # The window is a hard filter rather than part of the floor, but it is
+        # still the router's own cut, so it belongs in the audit trail next to
+        # the recall gate the same input_tokens raises.
+        ctx = v["model"].get("context_tokens")
+        if min_context_tokens and ctx is not None and ctx < min_context_tokens:
+            cut[v["model"]["id"]] = (
+                f"context {ctx:,} below {min_context_tokens:,}")
+            continue
         ok, why = meets(v, rule, reg["efforts"])
         if ok:
             keep.append(v)
