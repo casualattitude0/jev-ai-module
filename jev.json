@@ -1,0 +1,25 @@
+{
+  "_note": "Which path each module's Jev decisions take. Checked in on purpose: routing is a project decision, not a secret, so it belongs somewhere visible rather than in .env. Environment variables still win over this file, for a one-off run.",
+  "backend": "openrouter",
+  "modules": {
+    "jev_model_router": {
+      "_module": "jev-model-router-module",
+      "backend": "openrouter"
+    },
+    "jev_workflow": {
+      "_module": "jev-workflow-module",
+      "backend": "openrouter"
+    },
+    "jev_data_policy": {
+      "_module": "jev-data-policy-module",
+      "_no_backend": "This module makes no Jev calls at all: data classification is deterministic and local, so it has no path to choose. It reads this file only for data_policy below.",
+      "data_policy": null
+    }
+  },
+  "_backends": {
+    "native": "the Jev API at www.jevai.org, with JEV_API_KEY",
+    "openrouter": "the Jev model ~typesafe/jev-latest on OpenRouter, with OPENROUTER_API_KEY"
+  },
+  "_precedence": "argument > MODULE_<NAME> env > JEV_<NAME> env > this file's modules.<module> > this file's top level > built-in default",
+  "_no_secrets": "An api_key here would be committed to git, so it is refused. Keys live in .env."
+}
