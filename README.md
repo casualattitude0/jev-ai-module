@@ -1,6 +1,7 @@
 # jev-ai-module
 
-> 一組自足的後端模組:決定要用哪個模型,以及哪些資料准許送出去。
+> 一組自足的後端模組:決定要用哪個模型、請求該進哪個工作流,
+> 以及一段內容裡有沒有個資與資安問題。
 
 每個模組都是自足的:複製單一資料夾到目標專案即可使用,不互相依賴。
 
@@ -70,28 +71,30 @@ print(serve(sel, "port the parser to async, here is the file: ..."))
   "backend": "openrouter",
   "modules": {
     "jev_model_router": { "backend": "openrouter" },
-    "jev_workflow":       { "backend": "openrouter" }
+    "jev_workflow":     { "backend": "openrouter" },
+    "jev_data_policy":  { "backend": "openrouter" }
   }
 }
 ```
 
-目前兩個模組都走 `openrouter`;把任一行改成 `native` 就只換那一個模組。
+目前三個模組都走 `openrouter`;把任一行改成 `native` 就只換那一個模組。
 
 每個模組的每一個設定都走同一個 resolver,不只是 backend:
 
 | 設定 | 共用名 | 模組專屬名 | `jev.json` |
 |---|---|---|---|
-| 決策走哪條路 | `JEV_BACKEND` | `MODEL_ROUTER_BACKEND` / `WORKFLOW_BACKEND` | `backend` |
+| 決策走哪條路 | `JEV_BACKEND` | `MODEL_ROUTER_BACKEND` / `WORKFLOW_BACKEND` / `DATA_POLICY_BACKEND` | `backend` |
 | Jev endpoint | `JEV_BASE_URL` | `MODEL_ROUTER_BASE_URL` … | `base_url` |
 | 模型登錄檔 | `JEV_MODELS` | `MODEL_ROUTER_MODELS` | `models` |
 | 工作流目錄 | `JEV_MODULES` | `WORKFLOW_MODULES` | `modules` |
-| 資料政策檔 | `JEV_DATA_POLICY` | `DATA_POLICY_DATA_POLICY` | `data_policy` |
+| 敏感度等級表 | `JEV_DATA_POLICY` | `DATA_POLICY_DATA_POLICY` | `data_policy` |
 | CLI 逾時 | `JEV_CLI_TIMEOUT` | `MODEL_ROUTER_CLI_TIMEOUT` | `cli_timeout` |
 
 金鑰是唯一的例外,只能從 `.env` 讀:名字裡有 `key`/`token`/`secret`/`password`
 的鍵寫進 `jev.json` 會被拒絕,因為那個檔案會進版控。
 
-優先順序:參數 > `MODEL_ROUTER_BACKEND` / `WORKFLOW_BACKEND` >
+優先順序:參數 > `MODEL_ROUTER_BACKEND` / `WORKFLOW_BACKEND` /
+`DATA_POLICY_BACKEND` >
 `JEV_BACKEND` > `jev.json` 的 `modules.<模組>` > `jev.json` 頂層 > 內建預設。
 環境變數贏過檔案,所以臨時跑一次不必去動一個已經 commit 的檔案;
 金鑰則相反,寫在 `jev.json` 會被拒絕(那個檔案會進 git),只能放 `.env`。
@@ -110,33 +113,56 @@ MODEL_ROUTER_BACKEND=openrouter python3 -m jev_model_router "..."   # 只有這�
 
 純 stdlib,零依賴。詳見 [jev-model-router-module/README.md](jev-model-router-module/README.md)。
 
-### 2. jev-data-policy-module — 決定誰能接收哪種敏感度的資料
+### 2. jev-data-policy-module — 判斷內容有沒有個資與資安問題
 
-確定性的資料分級過濾:哪些對象獲准接收 `public` / `internal` / `confidential` /
-`regulated` 的資料。不認識模型、不認識路由、不認識任何特定廠商。
+只做一件事:看一段內容,說出它的敏感度等級 — `public` / `internal` /
+`confidential` / `regulated`。等級的定義是**內容裡有什麼**(可識別到個人的
+資料、憑證、受法規保護的資料),不是誰能收。
 
-敏感度不該是交給別的系統權衡的偏好 — 「個資能不能送出去」用機率回答是錯的工具。
-所以它在對方看到選項之前就先移除,而不是變成評分裡的一個權重。
+它不認識模型、不認識廠商、沒有核准清單:「confidential 能不能送去某處」是
+你的合約與風險的決定,該住在那些東西旁邊,而不是住在讀文字的這顆裡面。
 
 ```bash
-python3 -m jev_data_policy                             # 看整份政策
-python3 -m jev_data_policy --class internal            # 誰獲准
-python3 -m jev_data_policy --check jevai.org internal  # 單一判斷
+python3 -m jev_data_policy "客戶 A123456789 的帳單地址是..."
+python3 -m jev_data_policy --json "..."
+python3 -m jev_data_policy --classes        # 看梯子,不打 API
+cat suspect.log | python3 -m jev_data_policy
 ```
 
-兩個模組互不 import。政策模組算出獲准清單,當成 router 的 `allow` 傳進去:
+```
+backend:    openrouter  (from jev.json modules.jev_data_policy.backend)
+content:    102 bytes
+class:      confidential
+confidence: 1.00
+            confidential=1.00  internal=0.00  public=0.00  regulated=0.00
+```
 
 ```python
-from jev_data_policy import guarded_call
-from jev_model_router import select_model
+from jev_data_policy import classify
 
-sel = guarded_call(select_model, data_class="internal",
-                   service="jevai.org",     # 這個呼叫會把任務文字送過去
-                   task="reconcile an inventory sync bug", stakes="medium")
+c = classify("user wang.mei@example.com, phone 0912-345-678")
+c.data_class            # 'confidential'
+c.at_least("internal")  # True
 ```
 
-出廠時**所有對象都只核准 `public`**,`approved_by` 為空。往上放行是法務與資安的
-決定,這個 repo 不可能知道你跟供應商簽了什麼。詳見
+判斷由 Jev 的 `choice` 決策負責,回的是等級與機率 —— Jev 回型別化的決策,
+不回自由文字,所以沒有誠實的方式讓它列出「是哪一段文字洩漏的」。能給的是
+等級,所以給的就是等級。
+
+但「這裡面有沒有個資」用機率回答是錯的形狀,所以不確定時**只往上、不往下**:
+
+```python
+c = classify(text, min_confidence=0.9)
+c.data_class       # 'confidential'
+c.escalated_from   # 'public' —— Jev 原本說的,留在紀錄裡
+```
+
+其他失敗也都往同一個方向倒:Jev 掛掉會拋例外而不是回 `public`;回一個梯子上
+沒有的等級會被拒絕;超過 16 KiB 的內容是拒絕而不是截斷 —— 截斷正是一份
+regulated 的內容變成 public 的方式。
+
+要分類就得把那段文字送給 Jev,這是問問題的代價,設計不掉:內容本身不能出門的
+話,傳一段描述而不是原文。詳見
 [jev-data-policy-module/README.md](jev-data-policy-module/README.md)。
 
 ### 3. jev-workflow-module — 決定請求該進哪個工作流
@@ -190,7 +216,8 @@ route.interface["implemented"]   # False -> 還沒有東西可跑
   帶進宿主專案。
 - **一份 `.env`、一份 `.gitignore`**:都在 repo 根目錄,模組不各自留一份。
   金鑰只放 `.env`(不進版控),範本放 `.env.example`。
-- **模組不互相 import**:需要組合時用依賴注入(把對方的函式當參數傳),
+- **模組不互相 import**:每個模組只回答自己那一個問題,把結果交給呼叫端;
+  真的需要組合時用依賴注入(把對方的函式當參數傳),
   讓每個模組都能單獨複製、單獨測試。
 
 ## 開發
@@ -201,7 +228,8 @@ python3 -m jev_model_router.verify           # 離線,47 項,不打 API
 python3 -m jev_model_router.verify --all     # 含實際 API 與 CLI 呼叫
 python3 -m jev_workflow.verify                 # 離線,35 項
 python3 -m jev_workflow.verify --live          # 再加真實路由(對限流敏感)
-python3 -m jev_data_policy.verify                # 離線,22 項,沒有 live 層
+python3 -m jev_data_policy.verify              # 離線,32 項,transport 上 stub
+python3 -m jev_data_policy.verify --live       # 再加 6 筆真實分類
 ```
 
 每個模組都把自己的驗證依據寫在 `result.md` 裡 —— 實際輸入、實際輸出、
