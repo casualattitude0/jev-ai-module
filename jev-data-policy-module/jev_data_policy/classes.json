@@ -1,23 +1,23 @@
 {
-  "version": 2,
+  "version": 3,
   "_note": "The sensitivity ladder, ordered least to most sensitive. Each description is handed to Jev verbatim as the criteria for that class, so editing a description IS editing the decision. Keep them about what the content contains -- personal data, credentials -- and never about who is allowed to receive it: this module does not know about vendors, models or approvals.",
-  "instructions": "Classify the sensitivity of this content by what it actually contains. Judge the content itself, not the topic it discusses: text that merely mentions passwords is not a credential, and a sentence about a patient is not a medical record. When content matches more than one class, choose the most sensitive one that genuinely applies.",
+  "instructions": "Classify the sensitivity of this content by what it actually contains. Judge the content itself, not the topic it discusses: text that merely mentions passwords is not a credential, and a sentence about a patient is not a medical record. Placeholders are not secrets: a value written as a fill-in -- xxxx, REPLACE_ME, angle brackets, starred or dotted masking -- carries nothing, and neither does a field that has already been redacted. That carve-out is narrow. It holds where the surrounding text presents the value as an illustration: documentation, a tutorial, a question about the shape of an input. A value assigned to a real setting in a log, a config file, an environment dump or source code is live, whatever its characters happen to spell. Where it is genuinely unclear whether a value is real, treat it as real. One real identifier or one working secret decides the class on its own, wherever it sits and however ordinary the text around it is. When content matches more than one class, choose the most sensitive one that genuinely applies.",
   "classes": [
     {
       "id": "public",
-      "description": "Nothing that identifies a person and nothing that grants access. Published documentation, open-source code, marketing copy, generic questions. Releasing it costs nothing."
+      "description": "Nothing that identifies a person and nothing that grants access. Published documentation, open-source code, marketing copy, generic questions, everyday conversation. Placeholder and example values belong here, as does prose that only describes a secret without carrying one. Releasing it costs nothing."
     },
     {
       "id": "internal",
-      "description": "No personal data and no credentials, but not for outsiders: unreleased plans, internal process, private source code, architecture and infrastructure detail, pricing and commercial terms. A leak is a business loss, not a loss to any individual."
+      "description": "No personal data and no credentials, but not for outsiders: unreleased plans, internal process, private source code, architecture and infrastructure detail, pricing and commercial terms. Also aggregate or anonymised figures that no individual can be recovered from, records whose identifying fields are already masked, and addresses that name a machine or a private network rather than a person. A leak is a business loss, not a loss to any individual."
     },
     {
       "id": "confidential",
-      "description": "Identifies a specific living person, or grants access to a system. Names with contact details, email addresses, phone numbers, home addresses, user accounts and IDs, IP addresses, employee or customer records. Also secrets: API keys, access tokens, passwords, private keys, connection strings, session cookies."
+      "description": "Identifies a specific living person, or grants access to a system. Names with contact details, email addresses, phone numbers, home addresses, user accounts and IDs, employee or customer records, and network addresses that can be traced back to an individual. A shared role or team alias that names nobody, and an address in a private network range, do not identify a person by themselves. Also secrets that really open something: API keys, access tokens, passwords, private keys, connection strings, session cookies -- though a fixture password that only unlocks a test database is not one."
     },
     {
       "id": "regulated",
-      "description": "Personal data a statute protects, or a credential that moves money or reaches production. National ID and passport numbers, bank and payment card numbers, health and medical records, biometrics, precise location history, data about children, and special-category data such as race, religion, politics, union membership, sexual orientation or criminal record. Also long-lived production credentials."
+      "description": "Personal data a statute protects, or a credential that moves money or reaches production. National ID and passport numbers, bank and payment card numbers, health and medical records, biometrics, precise location history, data about children, and special-category data such as race, religion, politics, union membership, sexual orientation or criminal record. Also long-lived production credentials. One such value is enough, even buried in otherwise routine text."
     }
   ]
 }
