@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """CLI for Jev-backed workflow selection.
 
-    python3 -m wfrouter "the sword swing feels weightless, can we talk about it"
-    python3 -m wfrouter --stage generate "make the goblin portraits"
-    python3 -m wfrouter --context art_bible=written "what art is still missing"
-    python3 -m wfrouter --list
-    python3 -m wfrouter --list --stage generate
-    python3 -m wfrouter --show coding-game
-    echo "long request" | python3 -m wfrouter
+    python3 -m jev_workflow "the sword swing feels weightless, can we talk about it"
+    python3 -m jev_workflow --stage generate "make the goblin portraits"
+    python3 -m jev_workflow --context art_bible=written "what art is still missing"
+    python3 -m jev_workflow --list
+    python3 -m jev_workflow --list --stage generate
+    python3 -m jev_workflow --show coding-game
+    echo "long request" | python3 -m jev_workflow
 
 Reads JEV_API_KEY from .env. --list and --show make no network call.
 """
@@ -17,9 +17,12 @@ import sys
 
 from . import JevError, RegistryError, load_registry, select_workflow
 from . import registry as R
+from .client import setting_source
 
 
 def print_registry(stage=None):
+    backend, source = setting_source("BACKEND", "native")
+    print(f"jev backend: {backend}  (from {source})\n")
     reg = load_registry()
     mods = [m for m in R.enabled(reg) if not stage or m["stage"] == stage]
     order = reg["stages"]
@@ -106,6 +109,8 @@ def main():
         path = " -> ".join(f"{s['decision']} ({s['confidence']})"
                            for s in route.steps)
         print(f"route:      {path}")
+    backend, source = setting_source("BACKEND", "native")
+    print(f"backend:    {backend}  (from {source})")
     print(f"workflow:   {route.display_name}  ({route.workflow_id})")
     print(f"command:    {route.command}")
     print(f"stage:      {route.stage}")

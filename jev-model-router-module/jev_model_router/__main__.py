@@ -7,18 +7,22 @@
     python3 select_model.py --list
     echo "long task text" | python3 select_model.py
 
-Reads JEV_API_KEY from .env. --serve additionally needs the provider key
-(ANTHROPIC_API_KEY or OPENAI_API_KEY) for whichever model Jev picks.
+Reads JEV_API_KEY from .env. --serve runs the chosen model through its own
+agent CLI (`claude`, `codex`), which carries its own auth; no provider API key
+is read here.
 """
 import argparse
 import json
 import sys
 
 from . import DispatchError, JevError, load_registry, select_model, serve
+from .client import setting_source
 from .registry import enabled, variants
 
 
 def print_registry():
+    backend, source = setting_source("BACKEND", "native")
+    print(f"jev backend: {backend}  (from {source})\n")
     reg = load_registry()
     vs = variants(reg)
     print(f"{len(enabled(reg))} models, {len(vs)} routing options "
@@ -44,7 +48,7 @@ def main():
     p.add_argument("--efforts", help="comma-separated effort levels to allow")
     p.add_argument("--min-context", type=int, metavar="TOKENS",
                    help="drop models with a known smaller context window")
-    p.add_argument("--transport", choices=["cli", "api"],
+    p.add_argument("--transport", choices=["cli"],
                    help="how to reach the model when serving (default cli)")
     p.add_argument("--input-tokens", type=int, metavar="N",
                    help="size of the real input; implies a context requirement")
@@ -96,6 +100,8 @@ def main():
         print(json.dumps(sel.as_dict(), indent=2))
         return 0
 
+    backend, source = setting_source("BACKEND", "native")
+    print(f"backend:    {backend}  (from {source})")
     if sel.assessment:
         a = sel.assessment
         print(f"difficulty: {a.difficulty}  ({a.kind}, ambiguous {a.ambiguous})")

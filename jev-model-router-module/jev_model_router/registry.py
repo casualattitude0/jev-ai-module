@@ -8,7 +8,7 @@ import json
 import math
 import os
 
-from .client import PKG_DIR
+from .client import PKG_DIR, setting_source
 
 REQUIRED = ("id", "provider", "display_name", "tier", "base_cost", "base_latency",
             "description", "efforts")
@@ -21,9 +21,20 @@ class RegistryError(ValueError):
     pass
 
 
+def registry_path(path=None):
+    """Which models.json is in force, and where that choice came from.
+
+    Resolved like every other setting here: MODEL_ROUTER_MODELS, then
+    JEV_MODELS, then jev.json, then the file shipped with this module.
+    """
+    if path:
+        return path, "argument"
+    return setting_source("MODELS", os.path.join(PKG_DIR, "models.json"))
+
+
 def load(path=None):
     """Return the validated registry dict."""
-    path = path or os.environ.get("JEV_MODELS", os.path.join(PKG_DIR, "models.json"))
+    path = registry_path(path)[0]
     with open(path) as f:
         reg = json.load(f)
 

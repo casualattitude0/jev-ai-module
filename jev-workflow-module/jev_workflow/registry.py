@@ -11,7 +11,7 @@ routing option, and deleting one removes it.
 import json
 import os
 
-from .client import PKG_DIR
+from .client import PKG_DIR, setting_source
 
 MANIFEST = "module.json"
 REQUIRED = ("id", "command", "stage", "display_name", "description")
@@ -22,9 +22,20 @@ class RegistryError(ValueError):
     pass
 
 
+def workflows_source(path=None):
+    """Which workflows directory is in force, and where that came from.
+
+    Resolved like every other setting here: WORKFLOW_MODULES (the scoped name,
+    unchanged from before), then JEV_MODULES, then jev.json, then the
+    directory shipped with this module.
+    """
+    if path:
+        return path, "argument"
+    return setting_source("MODULES", os.path.join(PKG_DIR, "workflows"))
+
+
 def workflows_dir(path=None):
-    return path or os.environ.get("WORKFLOW_MODULES",
-                                  os.path.join(PKG_DIR, "workflows"))
+    return workflows_source(path)[0]
 
 
 def load(path=None):
