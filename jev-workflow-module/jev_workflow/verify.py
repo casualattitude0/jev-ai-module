@@ -380,6 +380,8 @@ def offline(reg):
          lambda r: _write(r, "brainstorm", stage="vibes"), "unknown stage"),
         ("a dangling depends_on",
          lambda r: _write(r, "brainstorm", depends_on=["ghost"]), "unknown workflow"),
+        ("a depends_on pointing at a later stage",
+         lambda r: _write(r, "define-art", depends_on=["qa-test"]), "later stage"),
         ("an unknown entry kind",
          lambda r: _write(r, "brainstorm", entry={"kind": "telepathy"}), "entry.kind"),
         ("malformed JSON",

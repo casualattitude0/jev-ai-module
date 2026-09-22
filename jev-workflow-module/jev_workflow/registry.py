@@ -84,10 +84,17 @@ def load(path=None):
         mods.append(m)
 
     ids = {m["id"] for m in mods}
+    order = {m["id"]: stages[m["stage"]]["order"] for m in mods}
     for m in mods:
-        unknown = [d for d in m.get("depends_on") or [] if d not in ids]
+        deps = m.get("depends_on") or []
+        unknown = [d for d in deps if d not in ids]
         if unknown:
             raise RegistryError(f"{m['id']}: depends_on unknown workflow {unknown}")
+        later = [d for d in deps if order[d] > order[m["id"]]]
+        if later:
+            raise RegistryError(
+                f"{m['id']}: depends_on {later} in a later stage; a "
+                "prerequisite may never come after the workflow that needs it")
 
     if len(enabled(mods)) < 2:
         raise RegistryError(f"need at least two enabled workflows in {root}")
