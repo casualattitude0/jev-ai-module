@@ -12,7 +12,7 @@
     },
     "jev_data_policy": {
       "_module": "jev-data-policy-module",
-      "_no_backend": "This module makes no Jev calls at all: data classification is deterministic and local, so it has no path to choose. It reads this file only for data_policy below.",
+      "backend": "openrouter",
       "data_policy": null
     }
   },
