@@ -244,28 +244,6 @@ def resolve_jev_model():
     return slug
 
 
-# The named presets, written out as the questions they are made of. OpenRouter
-# serves the generic endpoint only, so this is where the preset lives on that
-# backend rather than on the server.
-TOOL_GUARD_CRITERIA = {
-    "allow": "Safe to run as-is.",
-    "confirm": "Run only after the user confirms.",
-    "review": "A model or person should review this call before it runs.",
-    "deny": "Do not run this call.",
-}
-COMPLETION_CRITERIA = {
-    "complete": "The objective is met and verified.",
-    "verify_more": "Plausibly done, but verification is missing.",
-    "incomplete": "Work remains.",
-}
-RISK_LEGEND = [
-    "Low: small impact and easy to undo.",
-    "Moderate: limited impact with a known rollback path.",
-    "High: money, production, or incomplete verification.",
-    "Critical: unresolved blocker; execution is not safe.",
-]
-
-
 def _choice(answers, name):
     """Pull one choice answer out, as the flattened preset keys."""
     a = answers.get(name) or {}
@@ -278,6 +256,9 @@ def _generic(payload):
     return payload.get("state"), payload.get("questions") or {}
 
 
+# The one named preset this module uses, written out as the question it is made
+# of. OpenRouter serves the generic endpoint only, so on that backend the preset
+# lives here rather than on the server.
 def _model_route_request(payload):
     state = {k: payload[k] for k in ("task", "stakes", "priorities", "constraints")
              if payload.get(k)}
@@ -293,28 +274,6 @@ def _model_route_request(payload):
         "instructions": "Which (model, effort) variant should serve this task?",
         "criteria": criteria,
     }}
-
-
-def _tool_guard_request(payload):
-    return dict(payload), {
-        "decision": {"type": "choice",
-                     "instructions": "Should this tool call run?",
-                     "criteria": TOOL_GUARD_CRITERIA},
-        "needs_confirmation": {"type": "noul",
-                               "instructions": "Does this need the user to confirm?"},
-        "risk": {"type": "score", "instructions": "How risky is this call?",
-                 "criteria": RISK_LEGEND},
-    }
-
-
-def _completion_request(payload):
-    return dict(payload), {
-        "status": {"type": "choice",
-                   "instructions": "Is this objective complete?",
-                   "criteria": COMPLETION_CRITERIA},
-        "is_complete": {"type": "noul",
-                        "instructions": "Is the objective actually met?"},
-    }
 
 
 def _flatten(answers, name):
@@ -338,21 +297,9 @@ def _model_route_response(answers, _payload):
     return _flatten(answers, "decision")
 
 
-def _tool_guard_response(answers, _payload):
-    return _flatten(answers, "decision")
-
-
-def _completion_response(answers, _payload):
-    out = _flatten(answers, "status")
-    out["completion_probability"] = (answers.get("is_complete") or {}).get("noul", 0.0)
-    return out
-
-
 TRANSLATORS = {
     "/api/v1/decisions": (_generic, lambda answers, _p: {"answers": answers}),
     "/api/v1/decisions/model-route": (_model_route_request, _model_route_response),
-    "/api/v1/decisions/tool-guard": (_tool_guard_request, _tool_guard_response),
-    "/api/v1/decisions/completion": (_completion_request, _completion_response),
 }
 
 

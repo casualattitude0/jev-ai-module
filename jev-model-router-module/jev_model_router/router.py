@@ -215,21 +215,3 @@ def select_model(task, *, stakes="medium", priorities=None, constraints=None,
         floor=floor,
         excluded=excluded,
     )
-
-
-def guard_tool_call(tool, action, **kw):
-    """Jev tool-guard: allow | confirm | review | deny for a consequential call."""
-    payload = {"tool": tool, "action": action}
-    for k in ("arguments_summary", "side_effects", "safeguards", "policy", "reversibility"):
-        if kw.get(k):
-            payload[k] = kw[k]
-    return post("/api/v1/decisions/tool-guard", payload)
-
-
-def review_completion(objective, **kw):
-    """Jev completion check: complete | verify_more | incomplete."""
-    payload = {"objective": objective}
-    for k in ("completed_work", "verification", "known_gaps"):
-        if kw.get(k):
-            payload[k] = kw[k]
-    return post("/api/v1/decisions/completion", payload)

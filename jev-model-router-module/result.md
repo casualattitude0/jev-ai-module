@@ -131,14 +131,13 @@ Both modules are set to `openrouter` in the project-root `jev.json`.
 
 Both stages go through the chosen backend: the assessment and the variant
 choice. OpenRouter serves only the generic `{state, questions}` endpoint, so
-each preset is expressed as its questions and the flattened keys are rebuilt.
+the one preset this module uses is expressed as its question and the flattened
+keys are rebuilt.
 
 | endpoint | on openrouter |
 |---|---|
 | `/api/v1/decisions` | sent as-is; both backends speak it |
 | `/api/v1/decisions/model-route` | one `choice` over candidate ids, cost and latency folded into each option's text |
-| `/api/v1/decisions/tool-guard` | `choice` over allow/confirm/review/deny + `needs_confirmation` noul + `risk` score |
-| `/api/v1/decisions/completion` | `choice` over complete/verify_more/incomplete + `is_complete` noul |
 
 | difference | why |
 |---|---|

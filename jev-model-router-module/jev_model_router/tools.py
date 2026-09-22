@@ -1,7 +1,6 @@
 """Function-calling surface: the tool an agent calls to route and serve an input."""
-from . import registry
 from .dispatch import serve
-from .router import guard_tool_call, review_completion, select_model
+from .router import select_model
 
 SELECT_MODEL_SCHEMA = {
     "name": "select_model",

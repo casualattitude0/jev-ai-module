@@ -21,6 +21,7 @@ import time
 from . import (DispatchError, JevError, Selection, as_anthropic_tools,
                        as_openai_tools, call, load_registry, select_model, serve)
 from .client import post
+from .router import ASSESS_QUESTIONS
 from .registry import (RegistryError, candidates, enabled, load,
                                 split_variant, variants)
 
@@ -241,7 +242,8 @@ def offline(reg):
 
     def body_cap():
         try:
-            post("/api/v1/decisions/completion", {"objective": "x" * 40000})
+            post("/api/v1/decisions",
+             {"state": {"task": "x" * 40000}, "questions": ASSESS_QUESTIONS})
         except JevError as e:
             expect("32 KiB" in str(e), f"wrong error: {e}")
             return "rejected locally, no request sent"
@@ -414,9 +416,8 @@ def _sel(model, effort="high", vid="x@high"):
 def offline_backends(reg):
     """The native and openrouter backends must answer the same calls."""
     import re
-    from .client import (BACKENDS, TRANSLATORS, _completion_response,
-                                 _model_route_request, _tool_guard_request,
-                                 resolve_backend)
+    from .client import (BACKENDS, TRANSLATORS, _model_route_request,
+                                 _model_route_response, resolve_backend)
 
     def precedence():
         from . import client as _client
@@ -488,25 +489,22 @@ def offline_backends(reg):
     check("model-route translation keeps every candidate and its facts",
           candidates_survive_translation)
 
-    def presets_keep_their_options():
-        _, guard = _tool_guard_request({"tool": "bash", "action": "rm -rf x"})
-        expect(set(guard["decision"]["criteria"]) ==
-               {"allow", "confirm", "review", "deny"},
-               "tool-guard lost one of its four verdicts")
-        expect(guard["risk"]["type"] == "score", "risk must stay a score")
-        out = _completion_response(
-            {"status": {"choice": "verify_more", "confidence": 0.5,
-                        "probabilities": {"verify_more": 0.7}},
-             "is_complete": {"noul": 0.62}}, {})
-        expect(out["decision"] == "verify_more", "completion lost its decision")
-        expect(out["completion_probability"] == 0.62,
-               "completion_probability not rebuilt from is_complete")
+    def preset_rebuilds_the_flat_keys():
+        # The native preset answers with flattened keys alongside its answers;
+        # the openrouter path has to rebuild them from the generic response.
+        out = _model_route_response(
+            {"decision": {"choice": "claude-opus-5@high", "confidence": 0.81,
+                          "probabilities": {"claude-opus-5@high": 0.81}}}, {})
+        expect(out["decision"] == "claude-opus-5@high",
+               "model-route lost its decision")
+        expect(out["confidence"] == 0.81 and out["probabilities"],
+               "confidence or probabilities not rebuilt")
         expect(out["guidance"] == "" and
                out["guidance_source"] == "unavailable_on_openrouter",
                "guidance must be empty and say why, not be invented")
-        return "presets keep their options and flattened keys"
-    check("preset translations keep their options and rebuild the flat keys",
-          presets_keep_their_options)
+        return "decision, confidence and probabilities rebuilt; guidance honest"
+    check("the model-route translation rebuilds the flat keys",
+          preset_rebuilds_the_flat_keys)
 
     def key_reaches_jev_only():
         from .client import JEV_MODEL_PREFIXES, resolve_jev_model

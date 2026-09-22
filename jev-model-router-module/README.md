@@ -55,6 +55,16 @@ gates on measured recall instead. Luna advertises 1.05M and scores 41.3 on MRCR
 against Terra's 89.6, so it is cut from large inputs. Pass `input_tokens` and
 both the window requirement and the recall gate are derived for you.
 
+## Scope
+
+This module chooses a model and runs it. It does **not** judge whether a task is
+safe, whether a tool call should be allowed, or whether an agent's work is
+finished — those are somebody else's decisions, and routing them through the
+thing that picks models is how a router turns into a policy engine. The one
+security property it does own is the one it creates itself: it spawns
+subprocesses, so it is responsible for what is in their environment (see
+[Serving](#transports--how-the-chosen-model-is-reached)).
+
 Stdlib only. No dependencies.
 
 Self-contained: everything lives under `jev_model_router/`, including `models.json`.
@@ -155,10 +165,10 @@ A credential in `jev.json` is refused — that file is committed; keys stay in
 `.env`. Pin a Jev version with `JEV_OPENROUTER_MODEL` instead of `-latest`.
 
 OpenRouter serves only the generic `{state, questions}` decisions endpoint, not
-Jev's named presets, so each preset is written out here as the questions it is
-made of and the flattened answer is rebuilt on the way back. A check fails the
-suite if this module ever calls an endpoint with no translation, so the
-backends cannot drift apart silently.
+Jev's named presets, so the one preset this module uses (`model-route`) is
+written out here as the question it is made of and the flattened answer is
+rebuilt on the way back. A check fails the suite if this module ever calls an
+endpoint with no translation, so the backends cannot drift apart silently.
 
 **One difference, by design:** OpenRouter's decision questions are
 `choice | score | noul` only — there is no free-text type — so `guidance` comes
@@ -228,7 +238,7 @@ variants; `registry.load()` raises if not.
       __main__.py        CLI  (python -m jev_model_router)
       client.py          Jev transport: native + openrouter backends, 429 backoff
       registry.py        load + validate models.json, expand effort variants
-      router.py          select_model(), guard_tool_call(), review_completion()
+      router.py          select_model() — the two-stage routing decision
       dispatch.py        cli transport — call the chosen variant, no keys
       tools.py           function-calling schemas + executor
       verify.py          test suite  (python -m jev_model_router.verify)

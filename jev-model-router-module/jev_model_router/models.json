@@ -62,7 +62,7 @@
       "enabled": true,
       "verified": true,
       "description": "Cheapest GPT 5-6 tier at $0.20/$1.20 per 1M tokens, 1/25th of Sol on input. Holds ~85% of Sol's quality on short tasks: Terminal-Bench 2.1 84.7 vs Sol's 88.8, Agents' Last Exam 50.3 vs 53.6.",
-      "jev_role": "High-volume Jev preset calls. Tool-guard and completion checks on every agent step, where per-call cost dominates and the decision is usually clear-cut.",
+      "jev_role": "High-volume, clear-cut decisions taken on every agent step, where per-call cost dominates and the answer is rarely in doubt.",
       "strengths": [
         "cost per call",
         "throughput",
@@ -184,7 +184,7 @@
       "enabled": true,
       "verified": true,
       "description": "Strongest coding model available here: SWE-bench Verified 96.0 and Pro 79.2, against Sol's Pro 64.6 and Sonnet 5's 63.2. Also leads abstract reasoning by a wide margin, ARC-AGI-3 30.2 where the next best scores 7.8. Extended thinking on by default. $5/$25 per 1M, same input price as Sol.",
-      "jev_role": "Escalation target for deep_review, block, or tool-guard review. The model to hold the plan on a hard refactor while cheaper variants execute its steps.",
+      "jev_role": "Escalation target when a cheaper variant is not trusted with the call. The model to hold the plan on a hard refactor while cheaper variants execute its steps.",
       "strengths": [
         "repo-level coding",
         "ambiguous multi-file refactors",
